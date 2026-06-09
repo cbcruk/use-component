@@ -1,0 +1,58 @@
+{
+  "name": "use-component",
+  "version": "1.0.0",
+  "description": "Modern hooks-based reimplementation of @reach/component-component - inline state, refs, and lifecycle management for React",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "keywords": [
+    "react",
+    "hooks",
+    "component",
+    "lifecycle",
+    "state",
+    "refs",
+    "render-props"
+  ],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.2.9",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.7",
+    "vite-plugin-dts": "^4.4.0"
+  }
+}
