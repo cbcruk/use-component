@@ -1,7 +1,7 @@
 {
   "name": "use-component",
   "version": "1.0.0",
-  "description": "Modern hooks-based reimplementation of @reach/component-component - inline state, refs, and lifecycle management for React",
+  "description": "Inline local state and its methods, placed anywhere in JSX — including inside .map() and conditionals where hooks cannot be called",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -29,11 +29,11 @@
   "keywords": [
     "react",
     "hooks",
-    "component",
-    "lifecycle",
     "state",
-    "refs",
-    "render-props"
+    "local-state",
+    "inline-state",
+    "render-props",
+    "actions"
   ],
   "author": "",
   "license": "MIT",
