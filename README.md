@@ -1,407 +1,183 @@
 # use-component
 
-Modern hooks-based reimplementation of [@reach/component-component](https://reach.tech/component-component/).
+**JSX 아무 곳에나 떨어뜨리는 class body.**
 
-React Hooks 시대에 맞게 재해석한 인라인 state, refs, lifecycle 관리 라이브러리입니다.
+React Hooks가 못 하는 단 하나 — *임의의 JSX 지점, 특히 `.map()`이나 조건부 안에서, 별도 컴포넌트를 추출하지 않고 지역 state를 co-locate 하기* — 를 위한 작은 라이브러리입니다.
+
+```tsx
+{rows.map((row) => (
+  <Component
+    key={row.id}
+    initial={{ open: false }}
+    actions={(set, get) => ({ toggle: () => set({ open: !get().open }) })}
+  >
+    {({ state, actions }) => (
+      <Row row={row} open={state.open} onToggle={actions.toggle} />
+    )}
+  </Component>
+))}
+```
 
 ## 왜 이 라이브러리인가?
 
-원본 `@reach/component-component`는 Hooks 이전 시대에 class component의 기능을 render props로 사용할 수 있게 해주는 유용한 라이브러리였습니다. 하지만 현대 React에서는:
+이 프로젝트는 [@reach/component-component](https://reach.tech/component-component/)의 Hooks 재해석에서 출발했지만, 목표를 다시 잡았습니다.
 
-1. **Hooks가 기본** - 더 이상 class component 패턴을 흉내낼 필요가 없습니다
-2. **더 나은 타입 안전성** - TypeScript first로 설계
-3. **더 세분화된 API** - 필요한 기능만 import해서 사용
-4. **하위 호환성** - 기존 render props 패턴도 지원
+Hooks 시대에 "인라인 state/lifecycle을 훅으로 흉내내기"는 대부분 `useState`와 중복이고, `componentDidUpdate` 같은 lifecycle 흉내는 오히려 낡은 멘탈 모델을 다시 가르칩니다. 그래서 그 부분은 전부 걷어냈습니다.
+
+대신 **훅이 끝내 못 하는 일 하나**에 집중합니다. 훅은 루프·조건부 안에서 호출할 수 없으니, 리스트 각 항목에 작은 지역 state를 붙이려면 반드시 컴포넌트를 새로 빼야 합니다. render props는 그 자리에서 됩니다.
+
+그리고 여기에 한 가지 관점을 더합니다:
+
+> **정리 안 된 훅 뭉치보다, 명확한 메서드로 묶인 class가 나을 때가 있다.**
+
+그래서 state와 그 동작을 **한 덩어리 메서드(`actions`)** 로 묶습니다. 흩어진 `useState` / `useCallback` / `useEffect` 수프도 아니고, 컴포넌트를 새로 빼는 것도 아닌 — class의 *조직화* 는 취하고 lifecycle *안티패턴* 은 버린 형태입니다.
+
+| | 대응하는 class 개념 |
+| --- | --- |
+| `state`   | 필드 (fields) |
+| `actions` | 메서드 (methods) |
+| `set`     | `this.setState` (부분 병합) |
+| `get()`   | `this.state` (항상 최신) |
+
+`actions`는 **한 번만** 생성되고, 최신 state는 `get()`으로 읽으므로 stale closure가 없습니다.
 
 ## 설치
 
 ```bash
 npm install use-component
 # or
-yarn add use-component
-# or
 pnpm add use-component
 ```
 
-## 빠른 시작
+## API
 
-### Hooks API (권장)
+### `useComponent(options)` — 훅 형태
+
+이미 컴포넌트 안에 있고, state와 그 메서드를 한 덩어리로 묶고 싶을 때.
 
 ```tsx
 import { useComponent } from 'use-component'
 
-function ColorGenerator() {
-  const { state, setState } = useComponent({
-    initialState: { hue: 0 },
+function Counter() {
+  const { state, set, actions } = useComponent({
+    initial: { count: 0 },
+    actions: (set, get) => ({
+      inc: () => set({ count: get().count + 1 }),
+      reset: () => set({ count: 0 }),
+    }),
   })
 
   return (
     <div>
-      <button onClick={() => setState({ hue: Math.random() * 360 })}>
-        Generate Color
-      </button>
-      <div
-        style={{
-          width: 100,
-          height: 100,
-          background: `hsl(${state.hue}, 50%, 50%)`,
-        }}
-      />
+      <button onClick={actions.inc}>Count: {state.count}</button>
+      <button onClick={actions.reset}>Reset</button>
+      {/* 이름 붙일 필요 없는 일회성 업데이트는 set으로 */}
+      <button onClick={() => set({ count: 100 })}>Set 100</button>
     </div>
   )
 }
 ```
 
-### Render Props API (레거시 호환)
+**옵션**
+
+| 옵션 | 설명 |
+| --- | --- |
+| `initial` | 초기 state. 함수를 넘기면 lazy 초기화. |
+| `actions` | `(set, get) => ({ ...methods })`. state의 메서드들. 한 번만 생성. |
+| `onMount` | 마운트 직후 1회 실행 (`componentDidMount`). cleanup 함수 반환 가능. |
+
+> lifecycle은 `onMount` **하나뿐**입니다. `onUpdate`(componentDidUpdate) 흉내는 의도적으로 뺐습니다 — 대부분 event handler(= action)에서 처리하는 편이 명확하기 때문입니다. ("You Might Not Need an Effect")
+
+### `<Component>` — render props 형태
+
+훅을 호출할 수 없는 자리(`.map()`, 조건부 등)에 지역 state를 둘 때. 이게 이 라이브러리의 주인공입니다.
 
 ```tsx
 import { Component } from 'use-component'
 
-function ColorGenerator() {
-  return (
-    <Component initialState={{ hue: 0 }}>
-      {({ state, setState }) => (
-        <div>
-          <button onClick={() => setState({ hue: Math.random() * 360 })}>
-            Generate Color
-          </button>
-          <div
-            style={{
-              width: 100,
-              height: 100,
-              background: `hsl(${state.hue}, 50%, 50%)`,
-            }}
-          />
-        </div>
-      )}
-    </Component>
-  )
-}
+<Component
+  initial={{ open: false }}
+  actions={(set, get) => ({ toggle: () => set({ open: !get().open }) })}
+>
+  {({ state, actions }) => (
+    <button onClick={actions.toggle}>
+      {state.open ? '▼' : '▶'} details
+    </button>
+  )}
+</Component>
 ```
 
-## API Reference
+`<Component>`는 `useComponent`를 render props로 감싼 것뿐입니다. props는 `useComponent`의 옵션과 동일하고, `children`은 `{ state, set, actions }`를 받는 함수입니다.
 
-### `useComponent<S, R>(options)`
-
-메인 훅. state, refs, lifecycle을 통합 관리합니다.
+### 마운트 시 데이터 로딩
 
 ```tsx
-const { state, setState, refs, forceUpdate } = useComponent({
-  // State 초기화 (둘 중 하나 선택)
-  initialState: { count: 0 },
-  getInitialState: () => ({ count: 0 }), // lazy initialization
-
-  // Refs 초기화 (둘 중 하나 선택)
-  refs: { input: null },
-  getRefs: () => ({ input: React.createRef() }), // lazy initialization
-
-  // Lifecycle callbacks
-  onMount: (ctx) => {
-    console.log('Mounted with state:', ctx.state)
-    // cleanup 함수 반환 가능
-    return () => console.log('Cleanup on unmount')
-  },
-
-  onUpdate: (ctx) => {
-    console.log('Updated. Prev:', ctx.prevState, 'Current:', ctx.state)
-  },
-  updateDeps: [
-    /* deps */
-  ], // 지정하지 않으면 state 변경 시마다 호출
-
-  onUnmount: (ctx) => {
-    console.log('Will unmount')
-  },
-
-  onBeforeUpdate: (ctx) => {
-    // useLayoutEffect timing (DOM paint 전)
-    // scroll position 저장 등에 유용
-  },
-})
+<Component
+  initial={{ user: null }}
+  onMount={async ({ set }) => {
+    set({ user: await fetchUser() })
+  }}
+>
+  {({ state }) => (state.user ? <Profile user={state.user} /> : <Spinner />)}
+</Component>
 ```
 
-### `useComponentState<S>(initialState)`
+### 유틸 훅
 
-state만 필요할 때 사용하는 간소화된 훅.
-
-```tsx
-const { state, setState } = useComponentState({ count: 0 })
-
-// class component의 setState처럼 부분 업데이트
-setState({ count: 1 })
-setState((prev) => ({ count: prev.count + 1 }))
-```
-
-### `useComponentRefs<R>(getRefs)`
-
-refs만 필요할 때 사용하는 훅.
-
-```tsx
-const refs = useComponentRefs(() => ({
-  input: React.createRef<HTMLInputElement>(),
-  container: null as HTMLDivElement | null,
-}))
-```
-
-### Lifecycle Hooks
-
-개별 lifecycle 이벤트용 훅들:
-
-```tsx
-import {
-  useMount,
-  useUnmount,
-  useUpdate,
-  useBeforeUpdate,
-  useLifecycle,
-} from 'use-component'
-
-// componentDidMount
-useMount(() => {
-  console.log('Mounted')
-  return () => console.log('Cleanup')
-})
-
-// componentWillUnmount
-useUnmount(() => {
-  console.log('Will unmount')
-})
-
-// componentDidUpdate (mount 시에는 실행 안 됨)
-useUpdate(() => {
-  console.log('Updated')
-}, [dep1, dep2])
-
-// getSnapshotBeforeUpdate와 유사
-useBeforeUpdate(() => {
-  // DOM paint 전에 실행
-}, [dep1, dep2])
-
-// 통합 버전
-useLifecycle({
-  onMount: () => console.log('Mounted'),
-  onUpdate: () => console.log('Updated'),
-  onUnmount: () => console.log('Unmounted'),
-  deps: [dep1, dep2],
-})
-```
-
-### Utility Hooks
+인라인 state 패턴과 무관하게 순수하게 유용한 훅 몇 개를 함께 제공합니다.
 
 ```tsx
 import { usePrevious, usePreviousDistinct, useForceUpdate } from 'use-component'
 
-// 이전 값 추적
 const prevCount = usePrevious(count)
-
-// 조건부 이전 값 (변경되었을 때만 업데이트)
-const prevUser = usePreviousDistinct(
-  user,
-  (prev, curr) => prev?.id === curr?.id,
-)
-
-// 강제 리렌더
+const prevUser = usePreviousDistinct(user, (a, b) => a?.id === b?.id)
 const forceUpdate = useForceUpdate()
-```
-
-### Render Props Components
-
-```tsx
-import { Component, Effect } from 'use-component';
-
-// 전체 기능
-<Component
-  initialState={{ data: null }}
-  onMount={async ({ setState }) => {
-    const data = await fetchData();
-    setState({ data });
-  }}
->
-  {({ state }) => <DataView data={state.data} />}
-</Component>
-
-// Side effect만 필요할 때
-<Effect
-  onMount={() => { document.title = 'Hello'; }}
-  onUpdate={() => { document.title = `Count: ${count}`; }}
-  deps={[count]}
-/>
-```
-
-## 실전 예제
-
-### Data Fetching
-
-```tsx
-function UserProfile({ userId }: { userId: string }) {
-  const { state, setState } = useComponent({
-    initialState: { user: null, loading: true, error: null },
-    onMount: async ({ setState }) => {
-      try {
-        const user = await fetchUser(userId)
-        setState({ user, loading: false })
-      } catch (error) {
-        setState({ error, loading: false })
-      }
-    },
-  })
-
-  if (state.loading) return <Spinner />
-  if (state.error) return <Error error={state.error} />
-  return <UserCard user={state.user} />
-}
-```
-
-### Form with Refs
-
-```tsx
-function SearchForm() {
-  const { refs, state, setState } = useComponent({
-    getRefs: () => ({ input: React.createRef<HTMLInputElement>() }),
-    initialState: { results: [] },
-  })
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const query = refs.input.current?.value
-    if (query) {
-      const results = await search(query)
-      setState({ results })
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit}>
-      <input ref={refs.input} placeholder="Search..." />
-      <button type="submit">Search</button>
-      <ResultsList results={state.results} />
-    </form>
-  )
-}
-```
-
-### Scroll Position Restoration
-
-```tsx
-function MessageList({ messages }: { messages: Message[] }) {
-  const { refs } = useComponent({
-    getRefs: () => ({
-      container: React.createRef<HTMLDivElement>(),
-      scrollHeight: 0,
-    }),
-    onBeforeUpdate: ({ refs }) => {
-      // DOM 업데이트 전 scroll height 저장
-      if (refs.container.current) {
-        refs.scrollHeight = refs.container.current.scrollHeight
-      }
-    },
-    onUpdate: ({ refs }) => {
-      // DOM 업데이트 후 scroll position 조정
-      if (refs.container.current) {
-        const newScrollHeight = refs.container.current.scrollHeight
-        refs.container.current.scrollTop += newScrollHeight - refs.scrollHeight
-      }
-    },
-    updateDeps: [messages],
-  })
-
-  return (
-    <div ref={refs.container} style={{ overflow: 'auto', height: 400 }}>
-      {messages.map((msg) => (
-        <MessageItem key={msg.id} message={msg} />
-      ))}
-    </div>
-  )
-}
-```
-
-### Todo App (원본 예제 재현)
-
-```tsx
-function TodoApp() {
-  const { state, setState, refs } = useComponent({
-    getRefs: () => ({ input: React.createRef<HTMLInputElement>() }),
-    getInitialState: () => ({ todos: ['Learn use-component'] }),
-  })
-
-  // Document title 업데이트
-  useUpdate(() => {
-    document.title = `${state.todos.length} Todos`
-  }, [state.todos.length])
-
-  const addTodo = (e: React.FormEvent) => {
-    e.preventDefault()
-    const input = refs.input.current
-    if (input?.value) {
-      setState({ todos: [...state.todos, input.value] })
-      input.value = ''
-    }
-  }
-
-  return (
-    <div>
-      <h4>Todo List</h4>
-      <form onSubmit={addTodo}>
-        <input ref={refs.input} />
-        <button type="submit">Add</button>
-      </form>
-      <ul>
-        {state.todos.map((todo, i) => (
-          <TodoItem key={i} todo={todo} />
-        ))}
-      </ul>
-      <button onClick={() => setState({ todos: [] })}>Clear all</button>
-    </div>
-  )
-}
-
-function TodoItem({ todo }: { todo: string }) {
-  const { state, setState } = useComponentState({
-    hue: Math.random() * 360,
-  })
-
-  return (
-    <li style={{ color: `hsl(${state.hue}, 50%, 50%)` }}>
-      <button onClick={() => setState({ hue: Math.random() * 360 })}>🎨</button>
-      {todo}
-    </li>
-  )
-}
 ```
 
 ## TypeScript
 
-모든 API가 완전한 타입을 지원합니다:
+state(`S`)와 actions(`A`)가 모두 추론됩니다.
 
 ```tsx
-interface MyState {
-  count: number
-  name: string
-}
-
-interface MyRefs {
-  input: React.RefObject<HTMLInputElement>
-  timer: number | null
-}
-
-const { state, setState, refs } = useComponent<MyState, MyRefs>({
-  initialState: { count: 0, name: '' },
-  getRefs: () => ({ input: React.createRef(), timer: null }),
+const { state, actions } = useComponent({
+  initial: { count: 0, name: '' },
+  actions: (set, get) => ({
+    inc: () => set({ count: get().count + 1 }),
+  }),
 })
 
-// state와 refs가 완전히 타입 추론됨
-state.count // number
-refs.input.current // HTMLInputElement | null
+state.count   // number
+state.name    // string
+actions.inc   // () => void
 ```
 
-## 원본 @reach/component-component와의 차이점
+명시적으로 지정하려면:
 
-| Feature                   | Original     | use-component                  |
-| ------------------------- | ------------ | ------------------------------ |
-| API Style                 | Render Props | Hooks (primary) + Render Props |
-| TypeScript                | Limited      | Full support                   |
-| Bundle Size               | ~2KB         | ~1KB                           |
-| Tree Shaking              | ❌           | ✅                             |
-| React Version             | 16.3+        | 18+                            |
-| `shouldUpdate`            | ✅           | Use `React.memo` instead       |
-| `getSnapshotBeforeUpdate` | ✅           | `onBeforeUpdate`               |
+```tsx
+interface State { count: number }
+interface Actions { inc: () => void }
+
+useComponent<State, Actions>({
+  initial: { count: 0 },
+  actions: (set, get) => ({ inc: () => set({ count: get().count + 1 }) }),
+})
+```
+
+## 설계 원칙
+
+- **훅과 겹치지 않는 것만 한다** — 인라인 지역 state. 나머지는 React 기본 훅이 이미 잘 한다.
+- **class의 조직화는 취하고, lifecycle 안티패턴은 버린다** — `state`/`actions`/`set`/`get`, 그리고 `onMount` 하나뿐.
+- **작게 유지** — 코어는 `useComponent` + `<Component>` 둘. gzip 약 0.6KB.
+
+## 이전 버전(향수 포팅)에서 넘어오기
+
+`@reach/component-component` 스타일의 lifecycle emulation API(`onUpdate`, `onBeforeUpdate`, `updateDeps`, `useLifecycle`, `Effect`, `getRefs` 등)는 제거되었습니다.
+
+| 예전 | 지금 |
+| --- | --- |
+| `initialState` | `initial` |
+| `setState` (병합) | `set` (병합, 동일) |
+| `onUpdate` / `onBeforeUpdate` / `updateDeps` | 제거 — event handler(action)에서 처리 |
+| `getRefs` / `refs` | 제거 — 필요하면 컴포넌트 추출 |
+| `Effect`, `useUpdate`, `useLifecycle` | 제거 |
+| render props: `<Component>{fn}</Component>` | 동일하게 유지 (주인공으로 승격) |

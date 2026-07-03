@@ -1,104 +1,78 @@
-import type { ReactNode, DependencyList } from 'react';
+import type { ReactNode } from 'react';
 
 /**
- * Context passed to lifecycle callbacks and render functions
- */
-export interface ComponentContext<S extends object, R extends object = object> {
-  /** Current state */
-  state: S;
-  /** Update state (like class component setState) */
-  setState: SetState<S>;
-  /** Refs object */
-  refs: R;
-  /** Force re-render */
-  forceUpdate: () => void;
-}
-
-/**
- * Extended context for update lifecycle
- */
-export interface UpdateContext<S extends object, R extends object = object>
-  extends ComponentContext<S, R> {
-  prevState: S | undefined;
-}
-
-/**
- * SetState function signature
+ * State setter with class-like partial merge semantics.
+ *
+ * Mirrors `this.setState` — you pass a patch (or a function returning one)
+ * and it is shallow-merged into the current state object.
  */
 export type SetState<S extends object> = (
-  update: Partial<S> | ((prev: S) => Partial<S>)
+  patch: Partial<S> | ((prev: S) => Partial<S>)
 ) => void;
 
 /**
- * ShouldUpdate function signature
+ * Factory that builds the "methods" for a piece of inline state.
+ *
+ * Think of it as the method section of a class body: `set` is
+ * `this.setState`, `get()` is `this.state`. Actions are created once and
+ * always read fresh state through `get()`, so there are no stale closures.
+ *
+ * @example
+ * ```tsx
+ * (set, get) => ({
+ *   inc:   () => set({ count: get().count + 1 }),
+ *   reset: () => set({ count: 0 }),
+ * })
+ * ```
  */
-export interface ShouldUpdateArgs<S extends object> {
+export type ActionsFactory<S extends object, A extends object> = (
+  set: SetState<S>,
+  get: () => S
+) => A;
+
+/**
+ * The value handed to `useComponent` callers and `<Component>` children.
+ *
+ * `state` are the fields, `actions` are the methods, `set` is the
+ * escape hatch for one-off updates that don't warrant a named action.
+ */
+export interface ComponentApi<S extends object, A extends object = object> {
+  /** Current state (the "fields"). */
   state: S;
-  nextState: S;
+  /** Partial-merge setter (`this.setState`). */
+  set: SetState<S>;
+  /** The methods produced by the `actions` factory. */
+  actions: A;
 }
 
 /**
- * useComponent hook options
+ * Options shared by `useComponent` and `<Component>`.
  */
-export interface UseComponentOptions<S extends object, R extends object = object> {
-  /** Initial state object */
-  initialState?: S;
-  /** Lazy initial state function (prevents recomputation on re-render) */
-  getInitialState?: () => S;
-  /** Initial refs object */
-  refs?: R;
-  /** Lazy refs initialization */
-  getRefs?: () => R;
-  /** Called after mount */
-  onMount?: (ctx: ComponentContext<S, R>) => void | (() => void);
-  /** Called after every update */
-  onUpdate?: (ctx: UpdateContext<S, R>) => void | (() => void);
-  /** Dependencies for onUpdate (if not provided, runs on every render) */
-  updateDeps?: DependencyList;
-  /** Called before unmount */
-  onUnmount?: (ctx: Omit<ComponentContext<S, R>, 'setState' | 'forceUpdate'>) => void;
-  /** Called synchronously before DOM mutations (like getSnapshotBeforeUpdate) */
-  onBeforeUpdate?: (ctx: UpdateContext<S, R>) => void;
+export interface UseComponentOptions<
+  S extends object,
+  A extends object = object
+> {
+  /** Initial state. A function is treated as a lazy initializer. */
+  initial: S | (() => S);
+  /** Factory for the co-located methods. Runs once. */
+  actions?: ActionsFactory<S, A>;
+  /**
+   * Runs once after mount (`componentDidMount`). May return a cleanup
+   * function that runs on unmount. This is the only lifecycle hook —
+   * update/before-update emulation is intentionally omitted.
+   */
+  onMount?: (api: ComponentApi<S, A>) => void | (() => void);
 }
 
 /**
- * useComponent hook return value
+ * Props for the `<Component>` render-props component.
+ *
+ * The one thing hooks cannot do: co-locate ephemeral state and its methods
+ * at an arbitrary point in JSX — inside a `.map()` or a conditional — with
+ * no extracted component.
  */
-export interface UseComponentReturn<S extends object, R extends object = object> {
-  state: S;
-  setState: SetState<S>;
-  refs: R;
-  forceUpdate: () => void;
-}
-
-/**
- * Lifecycle hook options
- */
-export interface UseLifecycleOptions<R extends object = object> {
-  refs?: R;
-  onMount?: (refs: R) => void | (() => void);
-  onUnmount?: (refs: R) => void;
-}
-
-/**
- * Render props component props (legacy API support)
- */
-export interface ComponentProps<S extends object, R extends object = object>
-  extends UseComponentOptions<S, R> {
-  /** Render prop */
-  children?: ReactNode | ((ctx: ComponentContext<S, R>) => ReactNode);
-  /** Alternative render prop */
-  render?: (ctx: ComponentContext<S, R>) => ReactNode;
-}
-
-/**
- * Effect Component props for side effects only
- */
-export interface EffectProps {
-  /** Called on mount */
-  onMount?: () => void | (() => void);
-  /** Called on update (with optional deps) */
-  onUpdate?: () => void | (() => void);
-  /** Dependencies for update effect */
-  deps?: DependencyList;
+export interface ComponentProps<S extends object, A extends object = object>
+  extends UseComponentOptions<S, A> {
+  /** Render function receiving `{ state, set, actions }`. */
+  children: (api: ComponentApi<S, A>) => ReactNode;
 }
