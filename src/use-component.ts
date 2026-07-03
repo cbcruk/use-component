@@ -1,201 +1,95 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type {
   UseComponentOptions,
-  UseComponentReturn,
+  ComponentApi,
   SetState,
-  ComponentContext,
-  UpdateContext,
+  Self,
 } from './types';
-import { useForceUpdate } from './use-force-update';
-import { usePrevious } from './use-previous';
 
 /**
- * Modern hook-based reimplementation of @reach/component-component
+ * A class body you can drop anywhere — as a hook.
  *
- * Provides a unified way to manage state, refs, and lifecycle events
- * in a single hook call. Useful for complex inline component logic.
+ * Groups a piece of state with its methods, the way a class groups fields
+ * with methods, but without the class and without scattering `useState` /
+ * `useCallback` across the component body:
+ *
+ * - `state`   → the fields
+ * - `set`     → `this.setState` (shallow partial merge)
+ * - `actions` → the methods, built once from a `(self) => ({...})` factory
+ *
+ * Inside the factory, `self` is the explicit `this`: `self.state` (always
+ * fresh) and `self.set`. To have one action call another, capture it as a
+ * local and share the reference.
  *
  * @example
  * ```tsx
- * function ColorGenerator() {
- *   const { state, setState } = useComponent({
- *     initialState: { hue: 0 },
- *     onMount: ({ setState }) => {
- *       // Fetch initial data, setup subscriptions, etc.
+ * function Counter() {
+ *   const { state, actions } = useComponent({
+ *     initial: { count: 0 },
+ *     actions: (self) => {
+ *       const inc = () => self.set({ count: self.state.count + 1 });
+ *       return {
+ *         inc,
+ *         reset: () => self.set({ count: 0 }),
+ *         double: () => { inc(); inc(); },
+ *       };
  *     },
- *     onUpdate: ({ state, prevState }) => {
- *       console.log('Hue changed from', prevState?.hue, 'to', state.hue);
- *     },
- *     updateDeps: [/* explicit deps *\/],
  *   });
  *
- *   return (
- *     <button onClick={() => setState({ hue: Math.random() * 360 })}>
- *       Generate Color
- *     </button>
- *   );
- * }
- * ```
- *
- * @example With refs
- * ```tsx
- * function Form() {
- *   const { refs, state, setState } = useComponent({
- *     getRefs: () => ({ input: React.createRef<HTMLInputElement>() }),
- *     initialState: { submitted: false },
- *   });
- *
- *   return (
- *     <form onSubmit={() => {
- *       console.log(refs.input.current?.value);
- *       setState({ submitted: true });
- *     }}>
- *       <input ref={refs.input} />
- *     </form>
- *   );
+ *   return <button onClick={actions.inc}>Count: {state.count}</button>;
  * }
  * ```
  */
 export function useComponent<
-  S extends object = object,
-  R extends object = object
->(options: UseComponentOptions<S, R> = {}): UseComponentReturn<S, R> {
-  const {
-    initialState,
-    getInitialState,
-    refs: initialRefs,
-    getRefs,
-    onMount,
-    onUpdate,
-    updateDeps,
-    onUnmount,
-    onBeforeUpdate,
-  } = options;
+  S extends object,
+  A extends object = object
+>(options: UseComponentOptions<S, A>): ComponentApi<S, A> {
+  const { initial, actions: actionsFactory, onMount } = options;
 
-  // Initialize state (lazy initialization supported)
-  const [state, setStateInternal] = useState<S>(() => {
-    if (getInitialState) {
-      return getInitialState();
-    }
-    return (initialState ?? {}) as S;
-  });
+  const [state, setStateRaw] = useState<S>(initial);
 
-  // Initialize refs (only once, never re-computed)
-  const refsRef = useRef<R | null>(null);
-  if (refsRef.current === null) {
-    refsRef.current = getRefs ? getRefs() : ((initialRefs ?? {}) as R);
-  }
-  const refs = refsRef.current;
+  // Always-current snapshot so `self.state` reads fresh (this is `this.state`).
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
-  // Force update utility
-  const forceUpdate = useForceUpdate();
+  // Build the controller and its actions exactly once, like a class body.
+  const holder = useRef<{
+    set: SetState<S>;
+    actions: A;
+    self: Self<S> & A;
+  } | null>(null);
 
-  // Track previous state for onUpdate
-  const prevState = usePrevious(state);
-
-  // Create setState that merges like class component
-  const setState: SetState<S> = useCallback((update) => {
-    setStateInternal((prev) => {
-      const partial = typeof update === 'function' ? update(prev) : update;
-      return { ...prev, ...partial };
-    });
-  }, []);
-
-  // Create context object
-  const getContext = useCallback((): ComponentContext<S, R> => ({
-    state,
-    setState,
-    refs,
-    forceUpdate,
-  }), [state, setState, refs, forceUpdate]);
-
-  const getUpdateContext = useCallback((): UpdateContext<S, R> => ({
-    ...getContext(),
-    prevState,
-  }), [getContext, prevState]);
-
-  // Handle mount and unmount
-  useEffect(() => {
-    const ctx = getContext();
-    const cleanup = onMount?.(ctx);
-
-    return () => {
-      if (typeof cleanup === 'function') {
-        cleanup();
-      }
-      onUnmount?.({ state: ctx.state, refs: ctx.refs });
+  if (holder.current === null) {
+    const set: SetState<S> = (patch) => {
+      setStateRaw((prev) => {
+        const next = typeof patch === 'function' ? patch(prev) : patch;
+        return { ...prev, ...next };
+      });
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  // Track if mounted for update detection
-  const isMounted = useRef(false);
+    // `self` is the explicit `this`. Its `state` getter always returns the
+    // latest state. Actions are merged in below so `onMount` can call them.
+    const self = {
+      get state() {
+        return stateRef.current;
+      },
+      set,
+    } as Self<S> & A;
 
-  // Handle beforeUpdate (synchronous, before DOM paint)
-  useLayoutEffect(() => {
-    if (isMounted.current && onBeforeUpdate) {
-      onBeforeUpdate(getUpdateContext());
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, updateDeps ?? [state]);
+    const actions = (actionsFactory ? actionsFactory(self) : {}) as A;
+    Object.assign(self, actions);
 
-  // Handle update
-  useEffect(() => {
-    if (isMounted.current && onUpdate) {
-      return onUpdate(getUpdateContext()) ?? undefined;
-    }
-    isMounted.current = true;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, updateDeps ?? [state]);
-
-  return {
-    state,
-    setState,
-    refs,
-    forceUpdate,
-  };
-}
-
-/**
- * Simplified version for state-only use cases
- *
- * @example
- * ```tsx
- * const { state, setState } = useComponentState({ count: 0 });
- * ```
- */
-export function useComponentState<S extends object>(
-  initialState: S | (() => S)
-): Pick<UseComponentReturn<S>, 'state' | 'setState'> {
-  const [state, setStateInternal] = useState<S>(initialState);
-
-  const setState: SetState<S> = useCallback((update) => {
-    setStateInternal((prev) => {
-      const partial = typeof update === 'function' ? update(prev) : update;
-      return { ...prev, ...partial };
-    });
-  }, []);
-
-  return { state, setState };
-}
-
-/**
- * Hook for managing mutable refs object
- *
- * @example
- * ```tsx
- * const refs = useComponentRefs(() => ({
- *   input: React.createRef<HTMLInputElement>(),
- *   container: null as HTMLDivElement | null,
- * }));
- * ```
- */
-export function useComponentRefs<R extends object>(
-  getRefs: () => R
-): R {
-  const refsRef = useRef<R | null>(null);
-  if (refsRef.current === null) {
-    refsRef.current = getRefs();
+    holder.current = { set, actions, self };
   }
-  return refsRef.current;
+
+  const { set, actions, self } = holder.current;
+
+  const onMountRef = useRef(onMount);
+  useEffect(() => {
+    return onMountRef.current?.(self);
+    // Mount only, like componentDidMount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return { state, set, actions };
 }

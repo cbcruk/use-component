@@ -1,97 +1,43 @@
-import { useEffect, type ReactNode } from 'react';
-import type { ComponentProps, EffectProps } from './types';
+import type { ReactNode } from 'react';
+import type { ComponentProps } from './types';
 import { useComponent } from './use-component';
 
 /**
- * Render props component for inline state and lifecycle management
+ * Inline state and its methods, placed at an arbitrary point in JSX.
  *
- * This provides backward compatibility with @reach/component-component
- * while using modern hooks internally.
+ * This is the one thing hooks cannot do: co-locate ephemeral state with a
+ * single JSX node — inside a `.map()` or a conditional — without extracting
+ * a named component and prop-drilling into it.
  *
- * @example Basic state
+ * It reads like a class body dropped in place: `state` are the fields,
+ * `actions` are the methods, `set` is `this.setState`.
+ *
+ * @example Local state per list row — no extracted component
  * ```tsx
- * <Component initialState={{ count: 0 }}>
- *   {({ state, setState }) => (
- *     <button onClick={() => setState({ count: state.count + 1 })}>
- *       Count: {state.count}
- *     </button>
- *   )}
- * </Component>
+ * {rows.map((row) => (
+ *   <Component key={row.id} initial={{ open: false }}
+ *     actions={(set, get) => ({ toggle: () => set({ open: !get().open }) })}
+ *   >
+ *     {({ state, actions }) => (
+ *       <Row row={row} open={state.open} onToggle={actions.toggle} />
+ *     )}
+ *   </Component>
+ * ))}
  * ```
  *
- * @example With lifecycle
+ * @example Load on mount
  * ```tsx
  * <Component
- *   initialState={{ data: null }}
- *   onMount={async ({ setState }) => {
- *     const data = await fetchData();
- *     setState({ data });
- *   }}
+ *   initial={{ user: null }}
+ *   onMount={async ({ set }) => set({ user: await fetchUser() })}
  * >
- *   {({ state }) => state.data ? <DataView data={state.data} /> : <Loading />}
- * </Component>
- * ```
- *
- * @example With refs
- * ```tsx
- * <Component getRefs={() => ({ input: React.createRef() })}>
- *   {({ refs }) => (
- *     <form onSubmit={() => alert(refs.input.current?.value)}>
- *       <input ref={refs.input} />
- *       <button type="submit">Submit</button>
- *     </form>
- *   )}
+ *   {({ state }) => (state.user ? <Profile user={state.user} /> : <Spinner />)}
  * </Component>
  * ```
  */
-export function Component<S extends object = object, R extends object = object>({
+export function Component<S extends object, A extends object = object>({
   children,
-  render,
   ...options
-}: ComponentProps<S, R>): ReactNode {
-  const ctx = useComponent<S, R>(options);
-
-  // Support both children and render prop
-  const renderFn = render ?? children;
-
-  if (typeof renderFn === 'function') {
-    return renderFn(ctx);
-  }
-
-  // If children is not a function, render as-is
-  return renderFn ?? null;
-}
-
-/**
- * Lightweight component for side effects only (no state/refs)
- *
- * Useful for inline effects without creating a separate component
- *
- * @example Update document title
- * ```tsx
- * <Effect onMount={() => { document.title = 'New Title'; }} />
- * ```
- *
- * @example With dependencies
- * ```tsx
- * <Effect
- *   onUpdate={() => { document.title = `Count: ${count}`; }}
- *   deps={[count]}
- * />
- * ```
- */
-export function Effect({ onMount, onUpdate, deps }: EffectProps): null {
-  // Mount effect
-  useEffect(() => {
-    return onMount?.() ?? undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Update effect
-  useEffect(() => {
-    return onUpdate?.() ?? undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-
-  return null;
+}: ComponentProps<S, A>): ReactNode {
+  return children(useComponent<S, A>(options));
 }
