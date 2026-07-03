@@ -1,18 +1,27 @@
 import { useComponent, Component } from '../src';
 
-// useComponent — a class body as a hook.
+// useComponent — a class body as a hook. Actions call each other via `self`.
 function ColorGenerator() {
   const { state, actions } = useComponent({
     initial: { hue: 0 },
-    actions: (set) => ({
-      randomize: () => set({ hue: Math.random() * 360 }),
-    }),
+    actions: (self) => {
+      const randomize = () => self.set({ hue: Math.random() * 360 });
+      return {
+        randomize,
+        spin: () => self.set({ hue: (self.state.hue + 30) % 360 }),
+        randomizeTwice: () => {
+          randomize();
+          randomize();
+        },
+      };
+    },
   });
 
   return (
     <section>
-      <h3>useComponent — state + methods</h3>
-      <button onClick={actions.randomize}>Generate Color</button>
+      <h3>useComponent — state + methods (self)</h3>
+      <button onClick={actions.randomize}>Random</button>{' '}
+      <button onClick={actions.spin}>Spin +30°</button>
       <div
         style={{
           width: 100,
@@ -31,14 +40,14 @@ function ColorGenerator() {
 function TodoApp() {
   const { state, actions } = useComponent({
     initial: { todos: ['Learn use-component'], draft: '' },
-    actions: (set, get) => ({
-      setDraft: (draft: string) => set({ draft }),
+    actions: (self) => ({
+      setDraft: (draft: string) => self.set({ draft }),
       add: () => {
-        const draft = get().draft.trim();
+        const draft = self.state.draft.trim();
         if (!draft) return;
-        set({ todos: [...get().todos, draft], draft: '' });
+        self.set({ todos: [...self.state.todos, draft], draft: '' });
       },
-      clear: () => set({ todos: [] }),
+      clear: () => self.set({ todos: [] }),
     }),
   });
 
@@ -63,8 +72,8 @@ function TodoApp() {
           <Component
             key={i}
             initial={{ hue: (i * 57) % 360 }}
-            actions={(set, get) => ({
-              recolor: () => set({ hue: (get().hue + 47) % 360 }),
+            actions={(self) => ({
+              recolor: () => self.set({ hue: (self.state.hue + 47) % 360 }),
             })}
           >
             {({ state: s, actions: a }) => (

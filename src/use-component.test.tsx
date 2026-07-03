@@ -58,9 +58,9 @@ describe('useComponent — actions', () => {
     const { result } = renderHook(() =>
       useComponent({
         initial: { count: 0 },
-        actions: (set, get) => ({
-          inc: () => set({ count: get().count + 1 }),
-          reset: () => set({ count: 0 }),
+        actions: (self) => ({
+          inc: () => self.set({ count: self.state.count + 1 }),
+          reset: () => self.set({ count: 0 }),
         }),
       })
     );
@@ -72,12 +72,12 @@ describe('useComponent — actions', () => {
     expect(result.current.state.count).toBe(0);
   });
 
-  it('reads fresh state through get() — no stale closures', () => {
+  it('reads fresh state through self.state — no stale closures', () => {
     const { result } = renderHook(() =>
       useComponent({
         initial: { count: 0 },
-        actions: (set, get) => ({
-          inc: () => set({ count: get().count + 1 }),
+        actions: (self) => ({
+          inc: () => self.set({ count: self.state.count + 1 }),
         }),
       })
     );
@@ -91,14 +91,37 @@ describe('useComponent — actions', () => {
     expect(result.current.state.count).toBe(3);
   });
 
-  it('batches synchronous set calls within one action via get()', () => {
+  it('composes actions via a shared local reference', () => {
     const { result } = renderHook(() =>
       useComponent({
         initial: { count: 0 },
-        actions: (set, get) => ({
+        actions: (self) => {
+          // Functional updater so multiple updates in one tick accumulate,
+          // just like class this.setState(prev => ...).
+          const inc = () => self.set((prev) => ({ count: prev.count + 1 }));
+          return {
+            inc,
+            double: () => {
+              inc();
+              inc();
+            },
+          };
+        },
+      })
+    );
+
+    act(() => result.current.actions.double());
+    expect(result.current.state.count).toBe(2);
+  });
+
+  it('batches synchronous set calls within one action', () => {
+    const { result } = renderHook(() =>
+      useComponent({
+        initial: { count: 0 },
+        actions: (self) => ({
           incTwice: () => {
-            set({ count: get().count + 1 });
-            set((prev) => ({ count: prev.count + 1 }));
+            self.set({ count: self.state.count + 1 });
+            self.set((prev) => ({ count: prev.count + 1 }));
           },
         }),
       })
@@ -108,11 +131,27 @@ describe('useComponent — actions', () => {
     expect(result.current.state.count).toBe(2);
   });
 
+  it('survives being detached from the actions object (no this-binding footgun)', () => {
+    const { result } = renderHook(() =>
+      useComponent({
+        initial: { count: 0 },
+        actions: (self) => ({
+          inc: () => self.set({ count: self.state.count + 1 }),
+        }),
+      })
+    );
+
+    // Destructure and call standalone — self is closed over, not `this`.
+    const { inc } = result.current.actions;
+    act(() => inc());
+    expect(result.current.state.count).toBe(1);
+  });
+
   it('keeps a stable actions identity across renders', () => {
     const { result, rerender } = renderHook(() =>
       useComponent({
         initial: { count: 0 },
-        actions: (set) => ({ noop: () => set({ count: 0 }) }),
+        actions: (self) => ({ noop: () => self.set({ count: 0 }) }),
       })
     );
     const first = result.current.actions;
@@ -138,11 +177,12 @@ describe('useComponent — onMount', () => {
     expect(onMount).toHaveBeenCalledTimes(1);
   });
 
-  it('receives an api whose set updates state', () => {
+  it('receives self, so it can call an action', () => {
     const { result } = renderHook(() =>
       useComponent({
         initial: { ready: false },
-        onMount: ({ set }) => set({ ready: true }),
+        actions: (self) => ({ markReady: () => self.set({ ready: true }) }),
+        onMount: (self) => self.markReady(),
       })
     );
     expect(result.current.state.ready).toBe(true);
@@ -166,7 +206,7 @@ describe('useComponent — rendering', () => {
     function Counter() {
       const { state, actions } = useComponent({
         initial: { count: 0 },
-        actions: (set, get) => ({ inc: () => set({ count: get().count + 1 }) }),
+        actions: (self) => ({ inc: () => self.set({ count: self.state.count + 1 }) }),
       });
       renders.push(state.count);
       return <button onClick={actions.inc}>{state.count}</button>;

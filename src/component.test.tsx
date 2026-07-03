@@ -8,7 +8,7 @@ describe('<Component>', () => {
     render(
       <Component
         initial={{ count: 0 }}
-        actions={(set) => ({ inc: () => set({ count: 1 }) })}
+        actions={(self) => ({ inc: () => self.set({ count: 1 }) })}
       >
         {(api) => {
           seen.push(...Object.keys(api).sort());
@@ -23,7 +23,7 @@ describe('<Component>', () => {
     const { getByRole } = render(
       <Component
         initial={{ count: 0 }}
-        actions={(set, get) => ({ inc: () => set({ count: get().count + 1 }) })}
+        actions={(self) => ({ inc: () => self.set({ count: self.state.count + 1 }) })}
       >
         {({ state, actions }) => (
           <button onClick={actions.inc}>Count: {state.count}</button>
@@ -38,6 +38,32 @@ describe('<Component>', () => {
     expect(button.textContent).toBe('Count: 1');
   });
 
+  it('supports actions composed via a shared local reference', () => {
+    const { getByRole } = render(
+      <Component
+        initial={{ count: 0 }}
+        actions={(self) => {
+          const inc = () => self.set((prev) => ({ count: prev.count + 1 }));
+          return {
+            inc,
+            double: () => {
+              inc();
+              inc();
+            },
+          };
+        }}
+      >
+        {({ state, actions }) => (
+          <button onClick={actions.double}>Count: {state.count}</button>
+        )}
+      </Component>
+    );
+
+    const button = getByRole('button');
+    act(() => button.click());
+    expect(button.textContent).toBe('Count: 2');
+  });
+
   it('gives each instance in a .map() its own independent state', () => {
     const rows = ['a', 'b', 'c'];
     const { getAllByRole } = render(
@@ -46,7 +72,7 @@ describe('<Component>', () => {
           <Component
             key={row}
             initial={{ n: 0 }}
-            actions={(set, get) => ({ bump: () => set({ n: get().n + 1 }) })}
+            actions={(self) => ({ bump: () => self.set({ n: self.state.n + 1 }) })}
           >
             {({ state, actions }) => (
               <li>

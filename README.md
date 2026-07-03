@@ -7,7 +7,7 @@ Inline local state and its methods, placed anywhere in JSX — including inside 
   <Component
     key={row.id}
     initial={{ open: false }}
-    actions={(set, get) => ({ toggle: () => set({ open: !get().open }) })}
+    actions={(self) => ({ toggle: () => self.set({ open: !self.state.open }) })}
   >
     {({ state, actions }) => (
       <Row row={row} open={state.open} onToggle={actions.toggle} />
@@ -16,16 +16,17 @@ Inline local state and its methods, placed anywhere in JSX — including inside 
 ))}
 ```
 
-State and behavior are grouped like a class body:
+State and behavior are grouped like a class body. The `actions` factory
+receives `self` — the explicit `this`:
 
 | | Class equivalent |
 | --- | --- |
-| `state`   | fields |
-| `actions` | methods |
-| `set`     | `this.setState` (shallow partial merge) |
-| `get()`   | `this.state` (always current) |
+| `state`      | fields |
+| `actions`    | methods |
+| `self.set`   | `this.setState` (shallow partial merge) |
+| `self.state` | `this.state` (always current) |
 
-`actions` are created once and read fresh state through `get()`, so there are no stale closures.
+`actions` are created once and read fresh state through `self.state`, so there are no stale closures.
 
 ## Install
 
@@ -47,9 +48,9 @@ import { useComponent } from 'use-component'
 function Counter() {
   const { state, set, actions } = useComponent({
     initial: { count: 0 },
-    actions: (set, get) => ({
-      inc: () => set({ count: get().count + 1 }),
-      reset: () => set({ count: 0 }),
+    actions: (self) => ({
+      inc: () => self.set({ count: self.state.count + 1 }),
+      reset: () => self.set({ count: 0 }),
     }),
   })
 
@@ -76,8 +77,25 @@ function Counter() {
 | Option | Description |
 | --- | --- |
 | `initial` | Initial state. A function is treated as a lazy initializer. |
-| `actions` | `(set, get) => ({ ...methods })`. Built once. |
-| `onMount` | Runs once after mount (`componentDidMount`). May return a cleanup function. |
+| `actions` | `(self) => ({ ...methods })`. Built once. `self` has `state` (fresh) and `set`. |
+| `onMount` | Runs once after mount (`componentDidMount`). Receives `self` with actions merged in, so it may call them. May return a cleanup function. |
+
+**Composing actions.** To have one action call another, capture it as a local
+and share the reference — no `this`, no stale closures:
+
+```tsx
+actions: (self) => {
+  const inc = () => self.set((prev) => ({ count: prev.count + 1 }))
+  return {
+    inc,
+    double: () => { inc(); inc() }, // two updates in one tick → +2
+  }
+}
+```
+
+> `self.state` is fresh across events, but — like class `this.state` — it is
+> not updated synchronously within the same tick. For several updates in one
+> tick, use the functional updater `self.set((prev) => ...)` as above.
 
 ### `<Component>`
 
@@ -88,7 +106,7 @@ import { Component } from 'use-component'
 
 <Component
   initial={{ open: false }}
-  actions={(set, get) => ({ toggle: () => set({ open: !get().open }) })}
+  actions={(self) => ({ toggle: () => self.set({ open: !self.state.open }) })}
 >
   {({ state, actions }) => (
     <button onClick={actions.toggle}>{state.open ? '▼' : '▶'} details</button>
@@ -134,8 +152,8 @@ const forceUpdate = useForceUpdate()
 ```tsx
 const { state, actions } = useComponent({
   initial: { count: 0, name: '' },
-  actions: (set, get) => ({
-    inc: () => set({ count: get().count + 1 }),
+  actions: (self) => ({
+    inc: () => self.set({ count: self.state.count + 1 }),
   }),
 })
 
@@ -152,7 +170,7 @@ interface Actions { inc: () => void }
 
 useComponent<State, Actions>({
   initial: { count: 0 },
-  actions: (set, get) => ({ inc: () => set({ count: get().count + 1 }) }),
+  actions: (self) => ({ inc: () => self.set({ count: self.state.count + 1 }) }),
 })
 ```
 
@@ -163,7 +181,7 @@ useComponent<State, Actions>({
 | `useComponent` | hook |
 | `Component` | render-props component |
 | `usePrevious`, `usePreviousDistinct`, `useForceUpdate` | utility hooks |
-| `SetState`, `ActionsFactory`, `ComponentApi`, `UseComponentOptions`, `ComponentProps` | types |
+| `SetState`, `Self`, `ActionsFactory`, `ComponentApi`, `UseComponentOptions`, `ComponentProps` | types |
 
 ## License
 

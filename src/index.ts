@@ -9,6 +9,7 @@ export { useForceUpdate } from './use-force-update';
 // Types
 export type {
   SetState,
+  Self,
   ActionsFactory,
   ComponentApi,
   UseComponentOptions,

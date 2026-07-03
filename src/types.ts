@@ -11,30 +11,46 @@ export type SetState<S extends object> = (
 ) => void;
 
 /**
- * Factory that builds the "methods" for a piece of inline state.
+ * The explicit `this` handed to the `actions` factory.
  *
- * Think of it as the method section of a class body: `set` is
- * `this.setState`, `get()` is `this.state`. Actions are created once and
- * always read fresh state through `get()`, so there are no stale closures.
+ * `state` is a live getter — always the latest state, like a class's
+ * `this.state` — so actions never close over a stale snapshot. `set` is the
+ * partial-merge setter (`this.setState`).
  *
- * @example
+ * To have one action call another, capture it as a local and share the
+ * reference — no `this` and no stale closures:
+ *
  * ```tsx
- * (set, get) => ({
- *   inc:   () => set({ count: get().count + 1 }),
- *   reset: () => set({ count: 0 }),
- * })
+ * actions: (self) => {
+ *   const inc = () => self.set({ count: self.state.count + 1 });
+ *   return { inc, double: () => { inc(); inc(); } };
+ * }
  * ```
  */
+export interface Self<S extends object> {
+  /** Current state (always fresh — `this.state`). */
+  readonly state: S;
+  /** Partial-merge setter (`this.setState`). */
+  set: SetState<S>;
+}
+
+/**
+ * Factory that builds the methods for a piece of inline state.
+ *
+ * Receives {@link Self} and returns the methods. It runs once; the methods
+ * stay valid for the component's whole life. Keeping `self` free of the
+ * action type is what lets TypeScript infer the actions from the returned
+ * object without an explicit annotation.
+ */
 export type ActionsFactory<S extends object, A extends object> = (
-  set: SetState<S>,
-  get: () => S
+  self: Self<S>
 ) => A;
 
 /**
  * The value handed to `useComponent` callers and `<Component>` children.
  *
- * `state` are the fields, `actions` are the methods, `set` is the
- * escape hatch for one-off updates that don't warrant a named action.
+ * `state` are the fields, `actions` are the methods, `set` is the escape
+ * hatch for one-off updates that don't warrant a named action.
  */
 export interface ComponentApi<S extends object, A extends object = object> {
   /** Current state (the "fields"). */
@@ -54,14 +70,15 @@ export interface UseComponentOptions<
 > {
   /** Initial state. A function is treated as a lazy initializer. */
   initial: S | (() => S);
-  /** Factory for the co-located methods. Runs once. */
+  /** Factory for the co-located methods. Runs once, receives `self`. */
   actions?: ActionsFactory<S, A>;
   /**
-   * Runs once after mount (`componentDidMount`). May return a cleanup
-   * function that runs on unmount. This is the only lifecycle hook —
-   * update/before-update emulation is intentionally omitted.
+   * Runs once after mount (`componentDidMount`). Receives `self` with the
+   * actions merged in, so it may call them (e.g. `onMount: (self) =>
+   * self.load()`). May return a cleanup function that runs on unmount. This
+   * is the only lifecycle hook — update/before-update emulation is omitted.
    */
-  onMount?: (api: ComponentApi<S, A>) => void | (() => void);
+  onMount?: (self: Self<S> & A) => void | (() => void);
 }
 
 /**
