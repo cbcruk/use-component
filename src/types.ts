@@ -1,95 +1,94 @@
 import type { ReactNode } from 'react';
 
 /**
- * State setter with class-like partial merge semantics.
+ * Merges a patch into the current state, like `this.setState`.
  *
- * Mirrors `this.setState` — you pass a patch (or a function returning one)
- * and it is shallow-merged into the current state object.
+ * The merge is shallow: nested objects are replaced, not merged. The new
+ * state is only readable after the next render commits, so pass the function
+ * form when a value must be derived from an update made earlier in the same
+ * tick.
  */
 export type SetState<S extends object> = (
   patch: Partial<S> | ((prev: S) => Partial<S>)
 ) => void;
 
 /**
- * The explicit `this` handed to the `actions` factory.
+ * The explicit `this` passed to an {@link ActionsFactory}.
  *
- * `state` is a live getter — always the latest state, like a class's
- * `this.state` — so actions never close over a stale snapshot. `set` is the
- * partial-merge setter (`this.setState`).
- *
- * To have one action call another, capture it as a local and share the
- * reference — no `this` and no stale closures:
- *
- * ```tsx
- * actions: (self) => {
- *   const inc = () => self.set({ count: self.state.count + 1 });
- *   return { inc, double: () => { inc(); inc(); } };
- * }
- * ```
+ * Deliberately carries no action members. TypeScript infers the actions from
+ * the factory's return value, and naming that type here would make the
+ * inference circular and collapse it to `object`. To call one action from
+ * another, capture it as a local and share the reference.
  */
 export interface Self<S extends object> {
-  /** Current state (always fresh — `this.state`). */
+  /**
+   * The latest committed state, re-read on every access. An action captured
+   * once — an event handler, a callback held by a memoized child — still
+   * reads current values through it.
+   */
   readonly state: S;
-  /** Partial-merge setter (`this.setState`). */
+  /** Queues a state update ({@link SetState}). */
   set: SetState<S>;
 }
 
 /**
- * Factory that builds the methods for a piece of inline state.
+ * Builds the methods for one piece of state, once per component instance.
  *
- * Receives {@link Self} and returns the methods. It runs once; the methods
- * stay valid for the component's whole life. Keeping `self` free of the
- * action type is what lets TypeScript infer the actions from the returned
- * object without an explicit annotation.
+ * Runs during the first render. The methods it returns keep the same
+ * identity for the rest of the component's life, so they are safe to pass to
+ * memoized children or to list in effect dependencies.
  */
 export type ActionsFactory<S extends object, A extends object> = (
   self: Self<S>
 ) => A;
 
 /**
- * The value handed to `useComponent` callers and `<Component>` children.
- *
- * `state` are the fields, `actions` are the methods, `set` is the escape
- * hatch for one-off updates that don't warrant a named action.
+ * What {@link useComponent} returns, and what {@link Component} hands to its
+ * render function.
  */
 export interface ComponentApi<S extends object, A extends object = object> {
-  /** Current state (the "fields"). */
+  /** State as of the render that produced this object. */
   state: S;
-  /** Partial-merge setter (`this.setState`). */
+  /** Updates state without going through a named action ({@link SetState}). */
   set: SetState<S>;
-  /** The methods produced by the `actions` factory. */
+  /** The methods from the {@link ActionsFactory}. Stable across renders. */
   actions: A;
 }
 
 /**
- * Options shared by `useComponent` and `<Component>`.
+ * Configures {@link useComponent} and {@link Component}.
+ *
+ * Every field is read on the first render only. Passing a different
+ * `initial`, `actions`, or `onMount` later has no effect — the component
+ * keeps the ones it started with, the way a class keeps its constructor.
  */
 export interface UseComponentOptions<
   S extends object,
   A extends object = object
 > {
-  /** Initial state. A function is treated as a lazy initializer. */
+  /**
+   * State for the first render. Pass a function to build it lazily; it runs
+   * once rather than on every render.
+   */
   initial: S | (() => S);
-  /** Factory for the co-located methods. Runs once, receives `self`. */
+  /** Factory for the methods, called once during the first render. */
   actions?: ActionsFactory<S, A>;
   /**
-   * Runs once after mount (`componentDidMount`). Receives `self` with the
-   * actions merged in, so it may call them (e.g. `onMount: (self) =>
-   * self.load()`). May return a cleanup function that runs on unmount. This
-   * is the only lifecycle hook — update/before-update emulation is omitted.
+   * Runs after the first commit and never again, even when state changes.
+   * Return a function to run on unmount.
+   *
+   * React's StrictMode invokes it twice in development (mount, unmount,
+   * mount), so anything it starts must be undone by the returned cleanup.
    */
   onMount?: (self: Self<S> & A) => void | (() => void);
 }
 
 /**
- * Props for the `<Component>` render-props component.
- *
- * The one thing hooks cannot do: co-locate ephemeral state and its methods
- * at an arbitrary point in JSX — inside a `.map()` or a conditional — with
- * no extracted component.
+ * Configures {@link Component}: {@link UseComponentOptions} plus the render
+ * function.
  */
 export interface ComponentProps<S extends object, A extends object = object>
   extends UseComponentOptions<S, A> {
-  /** Render function receiving `{ state, set, actions }`. */
+  /** Called on every render of this element with that render's state. */
   children: (api: ComponentApi<S, A>) => ReactNode;
 }

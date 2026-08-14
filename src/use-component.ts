@@ -7,37 +7,44 @@ import type {
 } from './types';
 
 /**
- * A class body you can drop anywhere — as a hook.
+ * Holds a piece of state together with the methods that update it.
  *
- * Groups a piece of state with its methods, the way a class groups fields
- * with methods, but without the class and without scattering `useState` /
- * `useCallback` across the component body:
+ * The `actions` factory runs once, on the first render, and its methods keep
+ * a stable identity from then on. They reach state through `self.state`,
+ * which re-reads the latest committed value on every access, so a method
+ * captured once never operates on a stale snapshot.
  *
- * - `state`   → the fields
- * - `set`     → `this.setState` (shallow partial merge)
- * - `actions` → the methods, built once from a `(self) => ({...})` factory
- *
- * Inside the factory, `self` is the explicit `this`: `self.state` (always
- * fresh) and `self.set`. To have one action call another, capture it as a
- * local and share the reference.
+ * Within a single tick `self.state` still reports the last commit, exactly
+ * as class `this.state` does after `this.setState`. Use the functional form
+ * of `self.set` when several updates have to accumulate before the next
+ * render.
  *
  * @example
  * ```tsx
  * function Counter() {
  *   const { state, actions } = useComponent({
  *     initial: { count: 0 },
- *     actions: (self) => {
- *       const inc = () => self.set({ count: self.state.count + 1 });
- *       return {
- *         inc,
- *         reset: () => self.set({ count: 0 }),
- *         double: () => { inc(); inc(); },
- *       };
- *     },
+ *     actions: (self) => ({
+ *       inc: () => self.set({ count: self.state.count + 1 }),
+ *       reset: () => self.set({ count: 0 }),
+ *     }),
  *   });
  *
  *   return <button onClick={actions.inc}>Count: {state.count}</button>;
  * }
+ * ```
+ *
+ * @example Several updates in one tick
+ * ```tsx
+ * // Sharing a local reference is how one action calls another; the
+ * // functional updater is what makes the two increments accumulate.
+ * useComponent({
+ *   initial: { count: 0 },
+ *   actions: (self) => {
+ *     const inc = () => self.set((prev) => ({ count: prev.count + 1 }));
+ *     return { inc, double: () => { inc(); inc(); } }; // +2
+ *   },
+ * });
  * ```
  */
 export function useComponent<
