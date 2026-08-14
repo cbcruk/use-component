@@ -2,6 +2,8 @@
 
 Inline local state and its methods, placed anywhere in JSX — including inside `.map()` or conditionals, where hooks cannot be called.
 
+**[cbcruk.github.io/use-component](https://cbcruk.github.io/use-component/)** — live demo and API reference.
+
 ```tsx
 {rows.map((row) => (
   <Component

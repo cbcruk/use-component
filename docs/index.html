@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Local state and the methods that update it, placed at any point in JSX - including inside .map() and conditionals, where a hook call is illegal.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23B5731A%27/%3E%3Cpath d=%27M4 4.5v4a2.4 2.4 0 0 0 4.8 0v-4%27 fill=%27none%27 stroke=%27%23fff%27 stroke-width=%271.6%27 stroke-linecap=%27round%27/%3E%3Ccircle cx=%2711.6%27 cy=%2711%27 r=%271.5%27 fill=%27%23fff%27/%3E%3C/svg%3E">
+<meta property="og:type" content="website">
+<meta property="og:title" content="use-component">
+<meta property="og:description" content="Local state and the methods that update it, placed at any point in JSX - including inside .map() and conditionals, where a hook call is illegal.">
+<meta property="og:url" content="https://cbcruk.github.io/use-component/">
+<meta name="twitter:card" content="summary">
+<title>use-component</title>
+
+<style>
+  /* ---- tokens: light is the base, both themes redefine only these ---- */
+  :root {
+    --bg:        #FCFCFD;
+    --surface:   #F4F5F7;
+    --sunken:    #EDEFF2;
+    --text:      #17191E;
+    --muted:     #61656E;
+    --faint:     #8B909A;
+    --border:    #E2E4E9;
+    --accent:    #B5731A;
+    --mark:      rgba(224, 160, 60, 0.26);
+    --mark-edge: #C98A2E;
+    --shadow:    0 1px 2px rgba(20, 24, 33, .05), 0 8px 24px -12px rgba(20, 24, 33, .16);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:        #131519;
+      --surface:   #1B1E24;
+      --sunken:    #191C21;
+      --text:      #E8EAEE;
+      --muted:     #969BA6;
+      --faint:     #6E747F;
+      --border:    #2A2E36;
+      --accent:    #E3A248;
+      --mark:      rgba(227, 162, 72, 0.20);
+      --mark-edge: #A9762C;
+      --shadow:    0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px -12px rgba(0, 0, 0, .6);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg:        #131519;
+    --surface:   #1B1E24;
+    --sunken:    #191C21;
+    --text:      #E8EAEE;
+    --muted:     #969BA6;
+    --faint:     #6E747F;
+    --border:    #2A2E36;
+    --accent:    #E3A248;
+    --mark:      rgba(227, 162, 72, 0.20);
+    --mark-edge: #A9762C;
+    --shadow:    0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px -12px rgba(0, 0, 0, .6);
+  }
+
+  :root {
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
+            "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+            Arial, sans-serif;
+    --page: 60rem;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: var(--page);
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
+
+  /* ---- header ---- */
+  header {
+    border-bottom: 1px solid var(--border);
+  }
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .5rem 1.25rem;
+    padding: 1.25rem 0;
+  }
+  .wordmark {
+    font-family: var(--mono);
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -.02em;
+    margin: 0;
+  }
+  .wordmark .brace { color: var(--accent); }
+  .head nav {
+    margin-left: auto;
+    display: flex;
+    gap: 1.25rem;
+    font-family: var(--mono);
+    font-size: .8125rem;
+  }
+  a { color: inherit; }
+  .head nav a {
+    text-decoration: none;
+    color: var(--muted);
+    border-bottom: 1px solid transparent;
+    padding-bottom: 1px;
+  }
+  .head nav a:hover { color: var(--text); border-bottom-color: var(--accent); }
+
+  /* ---- hero ---- */
+  .hero { padding: 4rem 0 3rem; }
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(1.5rem, 1.1rem + 1.9vw, 2.25rem);
+    line-height: 1.25;
+    letter-spacing: -.03em;
+    font-weight: 600;
+    margin: 0 0 1rem;
+    max-width: 22ch;
+    text-wrap: balance;
+  }
+  .lede {
+    font-size: 1.0625rem;
+    color: var(--muted);
+    max-width: 60ch;
+    margin: 0 0 1.75rem;
+  }
+  .lede strong { color: var(--text); font-weight: 600; }
+
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 2.5rem;
+    font-family: var(--mono);
+    font-size: .75rem;
+  }
+  .badges li {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 3px;
+    padding: .2rem .55rem;
+    color: var(--muted);
+  }
+  .badges b { color: var(--text); font-weight: 600; }
+
+  /* ---- panel: code over its own running result ---- */
+  .panel {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .panel-bar {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .5rem .875rem;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: .75rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  .panel-bar .file { color: var(--muted); text-transform: none; letter-spacing: 0; }
+
+  pre {
+    margin: 0;
+    padding: 1.125rem 1.25rem;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: .8125rem;
+    line-height: 1.75;
+    tab-size: 2;
+  }
+  code { font-family: var(--mono); }
+  .cm { color: var(--faint); }
+  /* the accent has exactly one job: mark the line that matters */
+  .mk {
+    background: var(--mark);
+    box-shadow: inset 2px 0 0 var(--mark-edge);
+    display: inline-block;
+    width: 100%;
+    padding-left: .375rem;
+    margin-left: -.375rem;
+  }
+
+  .result {
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+    padding: 1.125rem 1.25rem 1.375rem;
+  }
+  .result-label {
+    font-family: var(--mono);
+    font-size: .6875rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin: 0 0 .875rem;
+  }
+
+  /* ---- the live rows ---- */
+  .rows { display: grid; gap: .5rem; }
+  .row {
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .row-head {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    width: 100%;
+    padding: .625rem .75rem;
+    background: none;
+    border: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .row-head:hover { background: var(--sunken); }
+  .row-head:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .caret {
+    flex: none;
+    width: .875rem;
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: .75rem;
+    transition: transform .18s ease;
+  }
+  .row[data-open="true"] .caret { transform: rotate(90deg); color: var(--accent); }
+  .row-title { flex: 1; font-size: .9375rem; }
+  .row-state {
+    flex: none;
+    font-family: var(--mono);
+    font-size: .6875rem;
+    color: var(--muted);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: .1rem .4rem;
+    white-space: nowrap;
+  }
+  .row[data-open="true"] .row-state { color: var(--accent); border-color: var(--mark-edge); }
+  .row-body {
+    display: none;
+    padding: 0 .75rem .75rem 2.375rem;
+    font-size: .875rem;
+    color: var(--muted);
+  }
+  .row[data-open="true"] .row-body { display: block; }
+  .hint {
+    margin: .875rem 0 0;
+    font-size: .8125rem;
+    color: var(--faint);
+  }
+
+  /* ---- sections ---- */
+  section { padding: 3.25rem 0; border-top: 1px solid var(--border); }
+  h2 {
+    font-family: var(--mono);
+    font-size: 1.0625rem;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    margin: 0 0 .5rem;
+  }
+  h3 {
+    font-family: var(--mono);
+    font-size: .9375rem;
+    font-weight: 600;
+    margin: 2.25rem 0 .5rem;
+  }
+  section > p, .prose {
+    color: var(--muted);
+    max-width: 66ch;
+    margin: 0 0 1.5rem;
+  }
+  p code, li code, td code {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: .05em .3em;
+    font-size: .875em;
+  }
+
+  .two {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+  .two .panel-bar .tag { font-weight: 600; }
+  .no .tag  { color: var(--muted); }
+  .yes .tag { color: var(--accent); }
+  .two pre { font-size: .78125rem; }
+
+  .note {
+    margin: 1.5rem 0 0;
+    padding-left: .875rem;
+    border-left: 2px solid var(--border);
+    color: var(--muted);
+    max-width: 62ch;
+    font-size: .9375rem;
+  }
+
+  /* ---- tables ---- */
+  .tablewrap { overflow-x: auto; margin-top: 1rem; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .875rem;
+    min-width: 34rem;
+  }
+  th, td {
+    text-align: left;
+    padding: .625rem .75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    font-family: var(--mono);
+    font-size: .6875rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--faint);
+    font-weight: 600;
+  }
+  td:first-child { font-family: var(--mono); white-space: nowrap; }
+  td:last-child { color: var(--muted); }
+
+  /* ---- footer ---- */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 2rem 0 3rem;
+    font-family: var(--mono);
+    font-size: .8125rem;
+    color: var(--faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem 1.5rem;
+  }
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { color: var(--text); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap head">
+    <p class="wordmark">use<span class="brace">-</span>component</p>
+    <nav>
+      <a href="https://github.com/cbcruk/use-component">GitHub</a>
+      <a href="https://www.npmjs.com/package/use-component">npm</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <h1>State where a hook can&rsquo;t go.</h1>
+    <p class="lede">
+      Local state and the methods that update it, placed at
+      <strong>any point in JSX</strong> &mdash; including inside
+      <code>.map()</code> and conditionals, where a hook call is illegal.
+    </p>
+
+    <ul class="badges">
+      <li><b>0.58 kB</b> gzip</li>
+      <li>TypeScript</li>
+      <li>React 18+</li>
+      <li>MIT</li>
+    </ul>
+
+    <div class="panel">
+      <div class="panel-bar">
+        <span>TSX</span>
+        <span class="file">TaskList.tsx</span>
+      </div>
+<pre><code>{tasks.map((task) =&gt; (
+<span class="mk">  &lt;Component key={task.id} initial={{ open: false }}</span>
+<span class="mk">    actions={(self) =&gt; ({ toggle: () =&gt; self.set({ open: !self.state.open }) })}</span>
+<span class="mk">  &gt;</span>
+    {({ state, actions }) =&gt; (
+      &lt;Task task={task} open={state.open} onToggle={actions.toggle} /&gt;
+    )}
+  &lt;/Component&gt;
+))}</code></pre>
+      <div class="result">
+        <p class="result-label">Result</p>
+        <div class="rows" id="demo">
+          <div class="row" data-open="false">
+            <button class="row-head" aria-expanded="false" aria-controls="b1">
+              <span class="caret" aria-hidden="true">&#9656;</span>
+              <span class="row-title">Cut the 1.2.0 release</span>
+              <span class="row-state">{ open: false }</span>
+            </button>
+            <div class="row-body" id="b1">
+              Tag the commit, run the build, publish to npm.
+            </div>
+          </div>
+          <div class="row" data-open="false">
+            <button class="row-head" aria-expanded="false" aria-controls="b2">
+              <span class="caret" aria-hidden="true">&#9656;</span>
+              <span class="row-title">Rewrite the JSDoc hovers</span>
+              <span class="row-state">{ open: false }</span>
+            </button>
+            <div class="row-body" id="b2">
+              First paragraph is the hover. One sentence, no name echo.
+            </div>
+          </div>
+          <div class="row" data-open="false">
+            <button class="row-head" aria-expanded="false" aria-controls="b3">
+              <span class="caret" aria-hidden="true">&#9656;</span>
+              <span class="row-title">Add the CI workflow</span>
+              <span class="row-state">{ open: false }</span>
+            </button>
+            <div class="row-body" id="b3">
+              Typecheck, test, build &mdash; on every pull request.
+            </div>
+          </div>
+        </div>
+        <p class="hint">
+          Open one row. Each element owns its state; its siblings never hear about it.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <section>
+    <div class="wrap">
+      <h2>Why it exists</h2>
+      <p>
+        Hooks can only be called at the top of a component, so a list row that
+        needs its own state forces you to invent a component to hold it &mdash;
+        along with a props interface to thread data back into it.
+      </p>
+
+      <div class="two">
+        <div class="panel no">
+          <div class="panel-bar"><span class="tag">Illegal</span></div>
+<pre><code>tasks.map((task) =&gt; {
+<span class="mk">  const [open, setOpen] = useState(false)</span>
+  <span class="cm">// React: hooks can't run in a loop</span>
+  return &lt;Task open={open} /&gt;
+})</code></pre>
+        </div>
+        <div class="panel no">
+          <div class="panel-bar"><span class="tag">The workaround, today</span></div>
+<pre><code><span class="cm">// a component that exists only to hold one boolean</span>
+<span class="mk">function TaskRow({ task }) {</span>
+  const [open, setOpen] = useState(false)
+  return &lt;Task task={task} open={open} /&gt;
+<span class="mk">}</span>
+
+tasks.map((t) =&gt; &lt;TaskRow key={t.id} task={t} /&gt;)</code></pre>
+        </div>
+      </div>
+
+      <p class="note">
+        <code>&lt;Component&gt;</code> is an element, not a hook call, so it is legal
+        exactly where the first example is not. The row above keeps its state and
+        loses the wrapper.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Install</h2>
+      <div class="panel" style="max-width:26rem">
+<pre><code>pnpm add use-component</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Usage</h2>
+      <p>
+        State and behavior are grouped the way a class groups fields and methods.
+        The <code>actions</code> factory receives <code>self</code> &mdash; the
+        explicit <code>this</code>.
+      </p>
+
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>In this library</th><th>Class equivalent</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>state</td><td>fields</td></tr>
+            <tr><td>actions</td><td>methods</td></tr>
+            <tr><td>self.set</td><td><code>this.setState</code> &mdash; shallow partial merge</td></tr>
+            <tr><td>self.state</td><td><code>this.state</code> &mdash; always the latest commit</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>useComponent</h3>
+      <p>The hook form, for when you are already inside a component.</p>
+      <div class="panel">
+<pre><code>import { useComponent } from 'use-component'
+
+function Counter() {
+  const { state, set, actions } = useComponent({
+    initial: { count: 0 },
+    actions: (self) =&gt; ({
+      inc: () =&gt; self.set({ count: self.state.count + 1 }),
+      reset: () =&gt; self.set({ count: 0 }),
+    }),
+  })
+
+  return (
+    &lt;div&gt;
+      &lt;button onClick={actions.inc}&gt;Count: {state.count}&lt;/button&gt;
+      &lt;button onClick={actions.reset}&gt;Reset&lt;/button&gt;
+      <span class="cm">{/* set handles one-offs that don't need a named action */}</span>
+      &lt;button onClick={() =&gt; set({ count: 100 })}&gt;Set 100&lt;/button&gt;
+    &lt;/div&gt;
+  )
+}</code></pre>
+      </div>
+
+      <h3>Composing actions</h3>
+      <p>
+        One action calls another through a shared local reference. The functional
+        updater is what makes two increments accumulate within a single tick.
+      </p>
+      <div class="panel">
+<pre><code>actions: (self) =&gt; {
+<span class="mk">  const inc = () =&gt; self.set((prev) =&gt; ({ count: prev.count + 1 }))</span>
+  return { inc, double: () =&gt; { inc(); inc() } }  <span class="cm">// +2</span>
+}</code></pre>
+      </div>
+
+      <h3>Loading on mount</h3>
+      <p>
+        <code>onMount</code> runs after the first commit and never again. Return a
+        function to clean up on unmount.
+      </p>
+      <div class="panel">
+<pre><code>&lt;Component
+  initial={{ user: null }}
+  onMount={async ({ set }) =&gt; set({ user: await fetchUser() })}
+&gt;
+  {({ state }) =&gt; (state.user ? &lt;Profile user={state.user} /&gt; : &lt;Spinner /&gt;)}
+&lt;/Component&gt;</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>API</h2>
+
+      <h3>Options</h3>
+      <p>Shared by <code>useComponent</code> and <code>&lt;Component&gt;</code>. Every field is read on the first render only.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Option</th><th>Type</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>initial</td>
+              <td><code>S | (() =&gt; S)</code></td>
+              <td>State for the first render. Pass a function to build it lazily.</td>
+            </tr>
+            <tr>
+              <td>actions</td>
+              <td><code>(self) =&gt; A</code></td>
+              <td>Factory for the methods, called once. They keep a stable identity afterwards.</td>
+            </tr>
+            <tr>
+              <td>onMount</td>
+              <td><code>(self) =&gt; void | cleanup</code></td>
+              <td>Runs after the first commit. StrictMode invokes it twice in development, so undo whatever it starts in the cleanup.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Returns</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Name</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>state</td><td>State as of this render.</td></tr>
+            <tr><td>set</td><td>Merges a patch into state. Accepts an object or <code>(prev) =&gt; patch</code>.</td></tr>
+            <tr><td>actions</td><td>The methods from the factory. Stable across renders.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Utility hooks</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Hook</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>usePrevious(value)</td>
+              <td>The value this component saw on its previous render; <code>undefined</code> on the first.</td>
+            </tr>
+            <tr>
+              <td>usePreviousDistinct(value, compare?)</td>
+              <td>The last value that differed. <code>compare</code> returns <code>true</code> for <em>same</em>.</td>
+            </tr>
+            <tr>
+              <td>useForceUpdate()</td>
+              <td>Re-renders the calling component on demand, for values that live outside React.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="wrap">
+  <footer>
+    <span>MIT</span>
+    <a href="https://github.com/cbcruk/use-component">github.com/cbcruk/use-component</a>
+  </footer>
+</div>
+
+<script>
+  // Mirrors the library's shape: state plus the methods that update it,
+  // one independent instance per row.
+  function createComponent(node, initial, actions) {
+    let state = { ...initial };
+    const self = {
+      get state() { return state; },
+      set(patch) {
+        state = { ...state, ...(typeof patch === 'function' ? patch(state) : patch) };
+        render();
+      },
+    };
+    const api = actions(self);
+
+    const head = node.querySelector('.row-head');
+    const badge = node.querySelector('.row-state');
+
+    function render() {
+      node.dataset.open = String(state.open);
+      head.setAttribute('aria-expanded', String(state.open));
+      badge.textContent = '{ open: ' + state.open + ' }';
+    }
+
+    head.addEventListener('click', api.toggle);
+    render();
+  }
+
+  document.querySelectorAll('#demo .row').forEach(function (node) {
+    createComponent(node, { open: false }, function (self) {
+      return { toggle: function () { self.set({ open: !self.state.open }); } };
+    });
+  });
+</script>
+</body>
+</html>
