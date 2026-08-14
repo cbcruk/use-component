@@ -3,20 +3,21 @@ import type { ComponentProps } from './types';
 import { useComponent } from './use-component';
 
 /**
- * Inline state and its methods, placed at an arbitrary point in JSX.
+ * Runs {@link useComponent} at the point in JSX where this element is written.
  *
- * This is the one thing hooks cannot do: co-locate ephemeral state with a
- * single JSX node — inside a `.map()` or a conditional — without extracting
- * a named component and prop-drilling into it.
+ * Goes anywhere an element goes — inside `.map()`, a conditional, a fragment —
+ * which is where a hook call would be illegal. That makes it the way to give
+ * one JSX node its own state without extracting a component to hold it.
  *
- * It reads like a class body dropped in place: `state` are the fields,
- * `actions` are the methods, `set` is `this.setState`.
+ * Each element owns its state independently of its siblings. React resets
+ * that state whenever it remounts the element, so a list needs stable `key`s
+ * for state to survive reordering.
  *
  * @example Local state per list row — no extracted component
  * ```tsx
  * {rows.map((row) => (
  *   <Component key={row.id} initial={{ open: false }}
- *     actions={(set, get) => ({ toggle: () => set({ open: !get().open }) })}
+ *     actions={(self) => ({ toggle: () => self.set({ open: !self.state.open }) })}
  *   >
  *     {({ state, actions }) => (
  *       <Row row={row} open={state.open} onToggle={actions.toggle} />

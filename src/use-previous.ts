@@ -1,20 +1,16 @@
 import { useRef, useEffect } from 'react';
 
 /**
- * Hook to track the previous value of a variable
+ * Returns the value this component saw on its previous render.
+ *
+ * `undefined` on the first render, since there is no previous one. The stored
+ * value advances after every commit, so two renders carrying the same value
+ * make the result equal to the current one.
  *
  * @example
  * ```tsx
- * function Counter() {
- *   const [count, setCount] = useState(0);
- *   const prevCount = usePrevious(count);
- *
- *   return (
- *     <div>
- *       Current: {count}, Previous: {prevCount}
- *     </div>
- *   );
- * }
+ * const prevCount = usePrevious(count);
+ * const grew = prevCount !== undefined && count > prevCount;
  * ```
  */
 export function usePrevious<T>(value: T): T | undefined {
@@ -28,12 +24,19 @@ export function usePrevious<T>(value: T): T | undefined {
 }
 
 /**
- * Hook to track the previous value with a custom comparison
- * Only updates the "previous" value when the comparison returns false
+ * Returns the last value that differed from the current one.
+ *
+ * Unlike {@link usePrevious}, renders that leave the value unchanged also
+ * leave the result unchanged, so it survives re-renders caused by unrelated
+ * state. The comparison runs during render rather than after commit.
+ *
+ * @param compare Returns `true` when the two values count as the same — the
+ * opposite polarity of a "did it change" predicate.
  *
  * @example
  * ```tsx
- * const prevUser = usePreviousDistinct(user, (prev, curr) => prev?.id === curr?.id);
+ * // Advances only when the id changes, not on every new user object.
+ * const prevUser = usePreviousDistinct(user, (prev, curr) => prev?.id === curr.id);
  * ```
  */
 export function usePreviousDistinct<T>(
