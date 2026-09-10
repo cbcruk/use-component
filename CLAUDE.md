@@ -28,7 +28,7 @@ For how to write it, use the `documenting-typescript` skill.
 
 ## Design constraints
 
-Two decisions are easy to undo by accident:
+Three decisions are easy to undo by accident:
 
 - **`Self` must not name the action type `A`.** TypeScript infers the actions
   from the factory's return value; naming that type in the parameter makes the
@@ -38,3 +38,11 @@ Two decisions are easy to undo by accident:
 - **`onMount` is the only lifecycle hook.** Update-phase emulation
   (`onUpdate`, `onBeforeUpdate`, dependency arrays) was removed deliberately;
   side effects belong in the caller's own `useEffect`.
+- **`onMount` returns `void | (() => void)`, never bare `void`.** The union is
+  what makes an `async onMount` a compile error: TypeScript's void-return
+  special case would otherwise accept a `Promise`, which React then invokes as
+  the unmount cleanup. Cancellation stays in userland for the same reason a
+  lifetime `AbortSignal` was considered for `self` and rejected — it would have
+  to sit on `Self` to cover async actions, and it needs re-arming machinery to
+  survive StrictMode's mount, unmount, mount. An `AbortController` in the
+  `onMount` body costs two lines and no API surface.
