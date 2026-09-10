@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { Driven } from './action';
 
 /**
  * Merges a patch into the current state, like `this.setState`.
@@ -51,8 +52,13 @@ export interface ComponentApi<S extends object, A extends object = object> {
   state: S;
   /** Updates state without going through a named action ({@link SetState}). */
   set: SetState<S>;
-  /** The methods from the {@link ActionsFactory}. Stable across renders. */
-  actions: A;
+  /**
+   * The methods from the {@link ActionsFactory}. Stable across renders.
+   *
+   * PROTOTYPE: generator members are handed back driven, so a caller sees a
+   * promise-returning function ({@link Driven}).
+   */
+  actions: Driven<A>;
 }
 
 /**
@@ -84,7 +90,7 @@ export interface UseComponentOptions<
    * React's StrictMode invokes it twice in development (mount, unmount,
    * mount), so anything it starts must be undone by the returned cleanup.
    */
-  onMount?: (self: Self<S> & A) => void | (() => void);
+  onMount?: (self: Self<S> & Driven<A>) => void | (() => void);
 }
 
 /**

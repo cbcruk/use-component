@@ -5,6 +5,7 @@ import type {
   SetState,
   Self,
 } from './types';
+import { drive, isGeneratorFunction, type Driven } from './action';
 
 /**
  * Holds a piece of state together with the methods that update it.
@@ -62,9 +63,13 @@ export function useComponent<
   // Build the controller and its actions exactly once, like a class body.
   const holder = useRef<{
     set: SetState<S>;
-    actions: A;
-    self: Self<S> & A;
+    actions: Driven<A>;
+    self: Self<S> & Driven<A>;
   } | null>(null);
+
+  // True between mount and unmount. Generator actions consult it before every
+  // step, so an unmounted element simply stops being resumed.
+  const alive = useRef(false);
 
   if (holder.current === null) {
     const set: SetState<S> = (patch) => {
@@ -81,19 +86,31 @@ export function useComponent<
         return stateRef.current;
       },
       set,
-    } as Self<S> & A;
+    } as Self<S> & Driven<A>;
 
-    const actions = (actionsFactory ? actionsFactory(self) : {}) as A;
+    const declared = (actionsFactory ? actionsFactory(self) : {}) as A;
+    const actions = {} as Record<string, unknown>;
+    for (const key of Object.keys(declared)) {
+      const member = (declared as Record<string, unknown>)[key];
+      actions[key] = isGeneratorFunction(member)
+        ? (...args: never[]) => drive(member(...args), () => alive.current)
+        : member;
+    }
     Object.assign(self, actions);
 
-    holder.current = { set, actions, self };
+    holder.current = { set, actions: actions as Driven<A>, self };
   }
 
   const { set, actions, self } = holder.current;
 
   const onMountRef = useRef(onMount);
   useEffect(() => {
-    return onMountRef.current?.(self);
+    alive.current = true;
+    const cleanup = onMountRef.current?.(self);
+    return () => {
+      alive.current = false;
+      cleanup?.();
+    };
     // Mount only, like componentDidMount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
