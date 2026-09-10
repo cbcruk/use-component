@@ -77,6 +77,10 @@ export interface UseComponentOptions<
    * Runs after the first commit and never again, even when state changes.
    * Return a function to run on unmount.
    *
+   * Cannot be `async`. Whatever it returns is registered as the cleanup, so a
+   * promise would be invoked as one when the element unmounts. Start the
+   * async work from a synchronous body and return a function that cancels it.
+   *
    * React's StrictMode invokes it twice in development (mount, unmount,
    * mount), so anything it starts must be undone by the returned cleanup.
    */

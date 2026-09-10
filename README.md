@@ -80,7 +80,7 @@ function Counter() {
 | --- | --- |
 | `initial` | Initial state. A function is treated as a lazy initializer. |
 | `actions` | `(self) => ({ ...methods })`. Built once. `self` has `state` (fresh) and `set`. |
-| `onMount` | Runs once after mount (`componentDidMount`). Receives `self` with actions merged in, so it may call them. May return a cleanup function. |
+| `onMount` | Runs once after mount (`componentDidMount`). Receives `self` with actions merged in, so it may call them. May return a cleanup function, so it cannot be `async`. |
 
 **Composing actions.** To have one action call another, capture it as a local
 and share the reference — no `this`, no stale closures:
@@ -120,11 +120,17 @@ Props are the same as `useComponent`'s options. `children` is a function receivi
 
 ### Loading on mount
 
+`onMount` cannot be `async` — whatever it returns is registered as the unmount
+cleanup, so a promise would be invoked as one. Start the work from a
+synchronous body and return a function that cancels it.
+
 ```tsx
 <Component
   initial={{ user: null }}
-  onMount={async ({ set }) => {
-    set({ user: await fetchUser() })
+  onMount={({ set }) => {
+    const controller = new AbortController()
+    fetchUser({ signal: controller.signal }).then((user) => set({ user }))
+    return () => controller.abort()
   }}
 >
   {({ state }) => (state.user ? <Profile user={state.user} /> : <Spinner />)}

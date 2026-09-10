@@ -561,12 +561,18 @@ function Counter() {
       <h3>Loading on mount</h3>
       <p>
         <code>onMount</code> runs after the first commit and never again. Return a
-        function to clean up on unmount.
+        function to clean up on unmount. That is also why it cannot be
+        <code>async</code>: a returned promise would be invoked as the cleanup.
+        Start the work from a synchronous body and return a function that cancels it.
       </p>
       <div class="panel">
 <pre><code>&lt;Component
   initial={{ user: null }}
-  onMount={async ({ set }) =&gt; set({ user: await fetchUser() })}
+  onMount={({ set }) =&gt; {
+<span class="mk">    const controller = new AbortController()</span>
+    fetchUser({ signal: controller.signal }).then((user) =&gt; set({ user }))
+<span class="mk">    return () =&gt; controller.abort()</span>
+  }}
 &gt;
   {({ state }) =&gt; (state.user ? &lt;Profile user={state.user} /&gt; : &lt;Spinner /&gt;)}
 &lt;/Component&gt;</code></pre>
@@ -597,7 +603,7 @@ function Counter() {
             <tr>
               <td>onMount</td>
               <td><code>(self) =&gt; void | cleanup</code></td>
-              <td>Runs after the first commit. StrictMode invokes it twice in development, so undo whatever it starts in the cleanup.</td>
+              <td>Runs after the first commit. Cannot be <code>async</code>, since the return value is the cleanup. StrictMode invokes it twice in development, so undo whatever it starts in the cleanup.</td>
             </tr>
           </tbody>
         </table>
