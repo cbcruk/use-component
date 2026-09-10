@@ -113,4 +113,53 @@ describe('<Component>', () => {
     );
     expect(getByRole('button').textContent).toBe('loaded');
   });
+
+  // The two below pin the async-load pattern the README and the `Component`
+  // JSDoc document. An `async onMount` returns a promise, React registers it
+  // as the cleanup, and unmounting fails with `destroy is not a function` —
+  // so a regression to `async` breaks the second one outright.
+  describe('loading asynchronously on mount', () => {
+    function renderLoader(fetchUser: (options: { signal: AbortSignal }) => Promise<string>) {
+      return render(
+        <Component
+          initial={{ user: null as string | null }}
+          onMount={({ set }) => {
+            const controller = new AbortController();
+            fetchUser({ signal: controller.signal }).then((user) => set({ user }));
+            return () => controller.abort();
+          }}
+        >
+          {({ state }) => <button>{state.user ?? 'loading'}</button>}
+        </Component>
+      );
+    }
+
+    it('applies the result once the work settles', async () => {
+      const { getByRole } = renderLoader(() => Promise.resolve('ada'));
+      expect(getByRole('button').textContent).toBe('loading');
+
+      await act(async () => {});
+      expect(getByRole('button').textContent).toBe('ada');
+    });
+
+    it('aborts the work when it unmounts before the result arrives', async () => {
+      let seen: AbortSignal | undefined;
+      let settle!: (user: string) => void;
+
+      const { getByRole, unmount } = renderLoader(({ signal }) => {
+        seen = signal;
+        return new Promise((resolve) => {
+          settle = resolve;
+        });
+      });
+      expect(getByRole('button').textContent).toBe('loading');
+      expect(seen?.aborted).toBe(false);
+
+      unmount();
+      expect(seen?.aborted).toBe(true);
+
+      // The late result must not reach a component that is already gone.
+      await act(async () => settle('ada'));
+    });
+  });
 });

@@ -26,11 +26,15 @@ import { useComponent } from './use-component';
  * ))}
  * ```
  *
- * @example Load on mount
+ * @example Load on mount, cancelling if it unmounts first
  * ```tsx
  * <Component
  *   initial={{ user: null }}
- *   onMount={async ({ set }) => set({ user: await fetchUser() })}
+ *   onMount={({ set }) => {
+ *     const controller = new AbortController();
+ *     fetchUser({ signal: controller.signal }).then((user) => set({ user }));
+ *     return () => controller.abort();
+ *   }}
  * >
  *   {({ state }) => (state.user ? <Profile user={state.user} /> : <Spinner />)}
  * </Component>
