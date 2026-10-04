@@ -92,6 +92,27 @@ describe('<Component>', () => {
     expect(buttons.map((b) => b.textContent)).toEqual(['a:0', 'b:2', 'c:0']);
   });
 
+  it('re-renders only its own children, not the enclosing component', () => {
+    let parentRenders = 0;
+    function Parent() {
+      parentRenders++;
+      return (
+        <Component
+          initial={{ n: 0 }}
+          actions={(self) => ({ bump: () => self.set({ n: self.state.n + 1 }) })}
+        >
+          {({ state, actions }) => <button onClick={actions.bump}>{state.n}</button>}
+        </Component>
+      );
+    }
+
+    const { getByRole } = render(<Parent />);
+    act(() => getByRole('button').click());
+
+    expect(getByRole('button').textContent).toBe('1');
+    expect(parentRenders).toBe(1);
+  });
+
   it('runs onMount for the inline instance', () => {
     const onMount = vi.fn();
     render(

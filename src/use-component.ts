@@ -70,7 +70,10 @@ export function useComponent<
     const set: SetState<S> = (patch) => {
       setStateRaw((prev) => {
         const next = typeof patch === 'function' ? patch(prev) : patch;
-        return { ...prev, ...next };
+        const changed = (Object.keys(next) as (keyof S)[]).some(
+          (key) => !Object.is(prev[key], next[key])
+        );
+        return changed ? { ...prev, ...next } : prev;
       });
     };
 

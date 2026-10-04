@@ -485,6 +485,8 @@ tasks.map((t) =&gt; &lt;TaskRow key={t.id} task={t} /&gt;)</code></pre>
         <code>&lt;Component&gt;</code> is an element, not a hook call, so it is legal
         exactly where the first example is not. The row above keeps its state and
         loses the wrapper.
+        A state change re-runs only that row&rsquo;s children &mdash; the list
+        around it does not re-render.
       </p>
     </div>
   </section>
@@ -615,7 +617,7 @@ function Counter() {
           <thead><tr><th>Name</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td>state</td><td>State as of this render.</td></tr>
-            <tr><td>set</td><td>Merges a patch into state. Accepts an object or <code>(prev) =&gt; patch</code>.</td></tr>
+            <tr><td>set</td><td>Merges a patch into state. Accepts an object or <code>(prev) =&gt; patch</code>. A patch that changes nothing (per-key <code>Object.is</code>) skips the re-render.</td></tr>
             <tr><td>actions</td><td>The methods from the factory. Stable across renders.</td></tr>
           </tbody>
         </table>

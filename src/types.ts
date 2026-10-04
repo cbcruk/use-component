@@ -7,6 +7,11 @@ import type { ReactNode } from 'react';
  * state is only readable after the next render commits, so pass the function
  * form when a value must be derived from an update made earlier in the same
  * tick.
+ *
+ * A patch whose every value is already in state (compared with `Object.is`)
+ * keeps the current state object and skips the re-render — unlike
+ * `this.setState`, which always renders. The comparison is per key, not deep:
+ * a new array or object with the same contents still counts as a change.
  */
 export type SetState<S extends object> = (
   patch: Partial<S> | ((prev: S) => Partial<S>)

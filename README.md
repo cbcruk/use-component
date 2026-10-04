@@ -71,7 +71,7 @@ function Counter() {
 | | |
 | --- | --- |
 | `state`   | current state |
-| `set`     | partial-merge setter, for one-off updates that don't need a named action |
+| `set`     | partial-merge setter, for one-off updates that don't need a named action. A patch that changes nothing (per-key `Object.is`) skips the re-render. |
 | `actions` | the methods from the `actions` factory |
 
 **Options**
@@ -117,6 +117,10 @@ import { Component } from 'use-component'
 ```
 
 Props are the same as `useComponent`'s options. `children` is a function receiving `{ state, set, actions }`.
+
+A state change re-runs only the `children` function — the component that
+renders `<Component>` does not re-render. Per-row state in a long list updates
+one row, not the whole list.
 
 ### Loading on mount
 
