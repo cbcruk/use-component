@@ -518,7 +518,7 @@ tasks.map((t) =&gt; &lt;TaskRow key={t.id} task={t} /&gt;)</code></pre>
             <tr><td>state</td><td>fields</td></tr>
             <tr><td>actions</td><td>methods</td></tr>
             <tr><td>self.set</td><td><code>this.setState</code> &mdash; shallow partial merge</td></tr>
-            <tr><td>self.state</td><td><code>this.state</code> &mdash; always the latest commit</td></tr>
+            <tr><td>self.state</td><td><code>this.state</code> &mdash; but updated as soon as <code>set</code> is called</td></tr>
           </tbody>
         </table>
       </div>
@@ -550,12 +550,13 @@ function Counter() {
 
       <h3>Composing actions</h3>
       <p>
-        One action calls another through a shared local reference. The functional
-        updater is what makes two increments accumulate within a single tick.
+        One action calls another through a shared local reference.
+        <code>self.state</code> reflects each <code>set</code> immediately, so
+        two increments in a single tick accumulate.
       </p>
       <div class="panel">
 <pre><code>actions: (self) =&gt; {
-<span class="mk">  const inc = () =&gt; self.set((prev) =&gt; ({ count: prev.count + 1 }))</span>
+<span class="mk">  const inc = () =&gt; self.set({ count: self.state.count + 1 })</span>
   return { inc, double: () =&gt; { inc(); inc() } }  <span class="cm">// +2</span>
 }</code></pre>
       </div>

@@ -3,10 +3,11 @@ import type { ReactNode } from 'react';
 /**
  * Merges a patch into the current state, like `this.setState`.
  *
- * The merge is shallow: nested objects are replaced, not merged. The new
- * state is only readable after the next render commits, so pass the function
- * form when a value must be derived from an update made earlier in the same
- * tick.
+ * The merge is shallow: nested objects are replaced, not merged. Unlike
+ * `this.setState`, the update is readable through {@link Self.state} as soon
+ * as the call returns, so consecutive calls in one tick build on each other;
+ * the rendered `state` catches up on the next render. The function form
+ * receives that same latest state.
  *
  * A patch whose every value is already in state (compared with `Object.is`)
  * keeps the current state object and skips the re-render — unlike
@@ -27,9 +28,13 @@ export type SetState<S extends object> = (
  */
 export interface Self<S extends object> {
   /**
-   * The latest committed state, re-read on every access. An action captured
-   * once — an event handler, a callback held by a memoized child — still
-   * reads current values through it.
+   * State with every `set` applied so far, including updates React has not
+   * rendered yet.
+   *
+   * Re-read on every access, so an action captured once — an event handler, a
+   * callback held by a memoized child — still reads current values. Inside a
+   * pending `startTransition` it already reports the transition's values while
+   * the screen still shows the old ones.
    */
   readonly state: S;
   /** Queues a state update ({@link SetState}). */

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { StrictMode, startTransition } from 'react';
 import { act, render, renderHook } from '@testing-library/react';
 import { useComponent } from './use-component';
 
@@ -121,13 +122,86 @@ describe('useComponent — actions', () => {
     expect(result.current.state.count).toBe(3);
   });
 
+  it('updates self.state synchronously, before the next render', () => {
+    const seen: number[] = [];
+    const { result } = renderHook(() =>
+      useComponent({
+        initial: { count: 0 },
+        actions: (self) => ({
+          inc: () => {
+            self.set({ count: self.state.count + 1 });
+            seen.push(self.state.count);
+          },
+        }),
+      })
+    );
+
+    act(() => result.current.actions.inc());
+    expect(seen).toEqual([1]);
+  });
+
+  it('accumulates object patches read from self.state within one tick', () => {
+    const { result } = renderHook(() =>
+      useComponent({
+        initial: { count: 0 },
+        actions: (self) => {
+          const inc = () => self.set({ count: self.state.count + 1 });
+          return { inc, double: () => { inc(); inc(); } };
+        },
+      })
+    );
+
+    act(() => result.current.actions.double());
+    expect(result.current.state.count).toBe(2);
+  });
+
+  it('keeps self.state in step with rendered state under StrictMode', () => {
+    let read = -1;
+    const { result } = renderHook(
+      () =>
+        useComponent({
+          initial: { count: 0 },
+          actions: (self) => ({
+            inc: () => self.set({ count: self.state.count + 1 }),
+            read: () => { read = self.state.count; },
+          }),
+        }),
+      { wrapper: StrictMode }
+    );
+
+    act(() => result.current.actions.inc());
+    act(() => result.current.actions.inc());
+    act(() => result.current.actions.read());
+
+    expect(result.current.state.count).toBe(2);
+    expect(read).toBe(2);
+  });
+
+  it('keeps a pending transition out of an urgent render', () => {
+    const renders: { a: number; b: number }[] = [];
+    let api!: ReturnType<typeof useComponent<{ a: number; b: number }>>;
+    function Probe() {
+      api = useComponent({ initial: { a: 0, b: 0 } });
+      renders.push(api.state);
+      return null;
+    }
+    render(<Probe />);
+    renders.length = 0;
+
+    act(() => {
+      startTransition(() => api.set({ a: 1 }));
+      api.set({ b: 1 });
+    });
+
+    expect(renders[0]).toEqual({ a: 0, b: 1 });
+    expect(renders.at(-1)).toEqual({ a: 1, b: 1 });
+  });
+
   it('composes actions via a shared local reference', () => {
     const { result } = renderHook(() =>
       useComponent({
         initial: { count: 0 },
         actions: (self) => {
-          // Functional updater so multiple updates in one tick accumulate,
-          // just like class this.setState(prev => ...).
           const inc = () => self.set((prev) => ({ count: prev.count + 1 }));
           return {
             inc,
