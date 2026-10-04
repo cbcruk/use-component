@@ -122,6 +122,34 @@ A state change re-runs only the `children` function — the component that
 renders `<Component>` does not re-render. Per-row state in a long list updates
 one row, not the whole list.
 
+### `defineComponent(build)`
+
+Declares options once, outside JSX, so several places can use the same state
+and actions. `build` takes whatever arguments you like and returns the options;
+`self` is typed for you. Hand the result to `useComponent` or spread it onto
+`<Component>`:
+
+```tsx
+import { Component, defineComponent, useComponent } from 'use-component'
+
+const Disclosure = defineComponent((initialOpen: boolean) => ({
+  initial: { open: initialOpen },
+  actions: (self) => ({ toggle: () => self.set({ open: !self.state.open }) }),
+}))
+
+const { state, actions } = useComponent(Disclosure(true))
+
+{rows.map((row) => (
+  <Component key={row.id} {...Disclosure(false)}>
+    {({ state, actions }) => <Row row={row} open={state.open} onToggle={actions.toggle} />}
+  </Component>
+))}
+```
+
+Each call is its own instance; nothing is shared between the components that
+use a definition. Like the options it builds, the arguments are read on the
+first render only.
+
 ### Loading on mount
 
 `onMount` cannot be `async` — whatever it returns is registered as the unmount
@@ -192,8 +220,9 @@ useComponent<State, Actions>({
 | --- | --- |
 | `useComponent` | hook |
 | `Component` | render-props component |
+| `defineComponent` | reusable options builder |
 | `usePrevious`, `usePreviousDistinct`, `useForceUpdate` | utility hooks |
-| `SetState`, `Self`, `ActionsFactory`, `ComponentApi`, `UseComponentOptions`, `ComponentProps` | types |
+| `SetState`, `Self`, `ActionsFactory`, `ComponentApi`, `UseComponentOptions`, `ComponentProps`, `ComponentDefinition` | types |
 
 ## License
 
