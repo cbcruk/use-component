@@ -9,6 +9,10 @@ import { useComponent } from './use-component';
  * which is where a hook call would be illegal. That makes it the way to give
  * one JSX node its own state without extracting a component to hold it.
  *
+ * A state change re-runs only this element's `children` function; the
+ * component that renders it does not re-render. Per-row state in a long list
+ * therefore updates one row, not the whole list.
+ *
  * Each element owns its state independently of its siblings. React resets
  * that state whenever it remounts the element, so a list needs stable `key`s
  * for state to survive reordering.

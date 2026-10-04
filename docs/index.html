@@ -485,6 +485,8 @@ tasks.map((t) =&gt; &lt;TaskRow key={t.id} task={t} /&gt;)</code></pre>
         <code>&lt;Component&gt;</code> is an element, not a hook call, so it is legal
         exactly where the first example is not. The row above keeps its state and
         loses the wrapper.
+        A state change re-runs only that row&rsquo;s children &mdash; the list
+        around it does not re-render.
       </p>
     </div>
   </section>

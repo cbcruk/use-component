@@ -118,6 +118,10 @@ import { Component } from 'use-component'
 
 Props are the same as `useComponent`'s options. `children` is a function receiving `{ state, set, actions }`.
 
+A state change re-runs only the `children` function — the component that
+renders `<Component>` does not re-render. Per-row state in a long list updates
+one row, not the whole list.
+
 ### Loading on mount
 
 `onMount` cannot be `async` — whatever it returns is registered as the unmount
