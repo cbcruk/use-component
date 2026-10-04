@@ -106,3 +106,17 @@ export interface ComponentProps<S extends object, A extends object = object>
   /** Called on every render of this element with that render's state. */
   children: (api: ComponentApi<S, A>) => ReactNode;
 }
+
+/**
+ * A reusable {@link UseComponentOptions} builder, made by
+ * {@link defineComponent}.
+ *
+ * Calling it returns fresh options to hand to {@link useComponent} or spread
+ * onto {@link Component}. Its arguments are read on the first render only,
+ * like the options they build.
+ */
+export type ComponentDefinition<
+  Args extends unknown[],
+  S extends object,
+  A extends object = object
+> = (...args: Args) => UseComponentOptions<S, A>;

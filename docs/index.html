@@ -561,6 +561,25 @@ function Counter() {
 }</code></pre>
       </div>
 
+      <h3>Reusing a definition</h3>
+      <p>
+        <code>defineComponent</code> declares the options once, outside JSX,
+        with <code>self</code> typed for you. Each call is still its own instance,
+        and its arguments are read on the first render only.
+      </p>
+      <div class="panel">
+<pre><code><span class="mk">const Disclosure = defineComponent((initialOpen: boolean) =&gt; ({</span>
+  initial: { open: initialOpen },
+  actions: (self) =&gt; ({ toggle: () =&gt; self.set({ open: !self.state.open }) }),
+}))
+
+const { state, actions } = useComponent(Disclosure(true))
+
+&lt;Component key={row.id} {...Disclosure(false)}&gt;
+  {({ state, actions }) =&gt; &lt;Row row={row} open={state.open} onToggle={actions.toggle} /&gt;}
+&lt;/Component&gt;</code></pre>
+      </div>
+
       <h3>Loading on mount</h3>
       <p>
         <code>onMount</code> runs after the first commit and never again. Return a

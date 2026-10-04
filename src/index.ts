@@ -3,7 +3,8 @@
  *
  * {@link useComponent} is the hook form; {@link Component} is the same thing
  * as an element, so state can sit inside a `.map()` or a conditional where a
- * hook call is not allowed.
+ * hook call is not allowed. {@link defineComponent} declares one set of
+ * options for reuse by both.
  *
  * ```tsx
  * import { Component } from 'use-component';
@@ -24,6 +25,7 @@
 
 export { useComponent } from './use-component';
 export { Component } from './component';
+export { defineComponent } from './define-component';
 
 export { usePrevious, usePreviousDistinct } from './use-previous';
 export { useForceUpdate } from './use-force-update';
@@ -35,4 +37,5 @@ export type {
   ComponentApi,
   UseComponentOptions,
   ComponentProps,
+  ComponentDefinition,
 } from './types';
