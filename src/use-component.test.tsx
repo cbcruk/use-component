@@ -43,6 +43,36 @@ describe('useComponent — set', () => {
     expect(result.current.state.count).toBe(15);
   });
 
+  it('skips the re-render when a patch changes nothing', () => {
+    let renders = 0;
+    const { result } = renderHook(() => {
+      renders++;
+      return useComponent({ initial: { count: 0, name: 'a' } });
+    });
+    const before = result.current.state;
+    renders = 0;
+
+    act(() => result.current.set({ count: 0 }));
+    act(() => result.current.set((prev) => ({ name: prev.name })));
+    act(() => result.current.set({}));
+
+    expect(renders).toBe(0);
+    expect(result.current.state).toBe(before);
+  });
+
+  it('compares patched values with Object.is, not deep equality', () => {
+    const { result } = renderHook(() =>
+      useComponent({ initial: { tags: ['a'], ratio: NaN } })
+    );
+    const before = result.current.state;
+
+    act(() => result.current.set({ ratio: NaN }));
+    expect(result.current.state).toBe(before);
+
+    act(() => result.current.set({ tags: ['a'] }));
+    expect(result.current.state).not.toBe(before);
+  });
+
   it('has a stable identity across renders', () => {
     const { result, rerender } = renderHook(() =>
       useComponent({ initial: { count: 0 } })

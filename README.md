@@ -71,7 +71,7 @@ function Counter() {
 | | |
 | --- | --- |
 | `state`   | current state |
-| `set`     | partial-merge setter, for one-off updates that don't need a named action |
+| `set`     | partial-merge setter, for one-off updates that don't need a named action. A patch that changes nothing (per-key `Object.is`) skips the re-render. |
 | `actions` | the methods from the `actions` factory |
 
 **Options**

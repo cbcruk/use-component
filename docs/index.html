@@ -615,7 +615,7 @@ function Counter() {
           <thead><tr><th>Name</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td>state</td><td>State as of this render.</td></tr>
-            <tr><td>set</td><td>Merges a patch into state. Accepts an object or <code>(prev) =&gt; patch</code>.</td></tr>
+            <tr><td>set</td><td>Merges a patch into state. Accepts an object or <code>(prev) =&gt; patch</code>. A patch that changes nothing (per-key <code>Object.is</code>) skips the re-render.</td></tr>
             <tr><td>actions</td><td>The methods from the factory. Stable across renders.</td></tr>
           </tbody>
         </table>
