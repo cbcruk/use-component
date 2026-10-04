@@ -5,19 +5,19 @@ import type {
   SetState,
   Self,
 } from './types';
+import { mergePatch } from './use-component.utils';
 
 /**
  * Holds a piece of state together with the methods that update it.
  *
  * The `actions` factory runs once, on the first render, and its methods keep
  * a stable identity from then on. They reach state through `self.state`,
- * which re-reads the latest committed value on every access, so a method
- * captured once never operates on a stale snapshot.
+ * which reflects every `self.set` made so far, so a method captured once
+ * never operates on a stale snapshot and consecutive updates in one tick
+ * build on each other.
  *
- * Within a single tick `self.state` still reports the last commit, exactly
- * as class `this.state` does after `this.setState`. Use the functional form
- * of `self.set` when several updates have to accumulate before the next
- * render.
+ * `self.state` therefore runs ahead of the render: it changes as soon as
+ * `set` is called, while the returned `state` changes when React renders.
  *
  * @example
  * ```tsx
@@ -34,14 +34,14 @@ import type {
  * }
  * ```
  *
- * @example Several updates in one tick
+ * @example One action calling another
  * ```tsx
- * // Sharing a local reference is how one action calls another; the
- * // functional updater is what makes the two increments accumulate.
+ * // Sharing a local reference is how one action calls another. Each call
+ * // reads the update the previous one made.
  * useComponent({
  *   initial: { count: 0 },
  *   actions: (self) => {
- *     const inc = () => self.set((prev) => ({ count: prev.count + 1 }));
+ *     const inc = () => self.set({ count: self.state.count + 1 });
  *     return { inc, double: () => { inc(); inc(); } }; // +2
  *   },
  * });
@@ -55,9 +55,8 @@ export function useComponent<
 
   const [state, setStateRaw] = useState<S>(initial);
 
-  // Always-current snapshot so `self.state` reads fresh (this is `this.state`).
+  // Every queued update, applied eagerly in `set`; never written during render.
   const stateRef = useRef(state);
-  stateRef.current = state;
 
   // Build the controller and its actions exactly once, like a class body.
   const holder = useRef<{
@@ -68,13 +67,14 @@ export function useComponent<
 
   if (holder.current === null) {
     const set: SetState<S> = (patch) => {
-      setStateRaw((prev) => {
-        const next = typeof patch === 'function' ? patch(prev) : patch;
-        const changed = (Object.keys(next) as (keyof S)[]).some(
-          (key) => !Object.is(prev[key], next[key])
-        );
-        return changed ? { ...prev, ...next } : prev;
-      });
+      const latest = stateRef.current;
+      const next = typeof patch === 'function' ? patch(latest) : patch;
+      const merged = mergePatch(latest, next);
+      if (merged === latest) return;
+      stateRef.current = merged;
+      // Queue the patch rather than `merged`, so a render in an urgent lane
+      // does not pick up values set inside a still-pending transition.
+      setStateRaw((prev) => mergePatch(prev, next));
     };
 
     // `self` is the explicit `this`. Its `state` getter always returns the

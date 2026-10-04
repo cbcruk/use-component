@@ -26,7 +26,7 @@ receives `self` — the explicit `this`:
 | `state`      | fields |
 | `actions`    | methods |
 | `self.set`   | `this.setState` (shallow partial merge) |
-| `self.state` | `this.state` (always current) |
+| `self.state` | `this.state`, but updated as soon as `set` is called |
 
 `actions` are created once and read fresh state through `self.state`, so there are no stale closures.
 
@@ -87,7 +87,7 @@ and share the reference — no `this`, no stale closures:
 
 ```tsx
 actions: (self) => {
-  const inc = () => self.set((prev) => ({ count: prev.count + 1 }))
+  const inc = () => self.set({ count: self.state.count + 1 })
   return {
     inc,
     double: () => { inc(); inc() }, // two updates in one tick → +2
@@ -95,9 +95,9 @@ actions: (self) => {
 }
 ```
 
-> `self.state` is fresh across events, but — like class `this.state` — it is
-> not updated synchronously within the same tick. For several updates in one
-> tick, use the functional updater `self.set((prev) => ...)` as above.
+> Unlike class `this.state`, `self.state` reflects a `set` immediately — before
+> React re-renders — so consecutive updates in one tick build on each other.
+> The rendered `state` catches up on the next render.
 
 ### `<Component>`
 
